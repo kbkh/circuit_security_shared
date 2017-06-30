@@ -134,7 +134,7 @@ int main(int argc, char **argv) {
         return 0;
     }
     
-    target_security = 16;
+    target_security = 2;
     
     cout<<outName<<" "<<tresh<<endl;
     stringstream ss;
