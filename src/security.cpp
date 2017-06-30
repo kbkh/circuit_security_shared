@@ -2712,7 +2712,7 @@ void Security::isomorphic_test(set<int> current_subgraph) {
             break;
     }
     
-    if (!iso) {
+    if (!iso && pags.size() == 0) {
         //                // debug
         //                cout<<"nope: ";
         //                set<int>::iterator it;
@@ -2729,7 +2729,7 @@ void Security::isomorphic_test(set<int> current_subgraph) {
         pags[pags.size()-1].vertices = vert;
         pags[pags.size()-1].max_degree = max_degree;
         pags[pags.size()-1].processed = false;
-    } else {
+    } else if (iso) {
         //                // debug
         //                cout<<"yup: ";
         //                set<int>::iterator it;
@@ -2954,53 +2954,55 @@ void Security::find_VD_embeddings(int i) {
 void Security::find_subgraphs() {
     set<int> not_permitted;
     
-    for (int i = 0; i < igraph_ecount(G); i++) {
-        // Create the subgraph
-        set<int> current_subgraph;
-        set<int>::iterator got = current_subgraph.find(i);
-        if (got == current_subgraph.end()) // not in set
-            current_subgraph.insert(i);
-        
-        set<int> neighbors;
-        set<int> permitted_neighbors;
-        
-        if (maxPAGsize > 1) {
-            // Enumerate the neighbors of the edge already in the subgraph. This will reduce the complexity of adding the neighbors of a newly added edge to the list of possible edges
-            neighbors = edge_neighbors[i];
+    if (maxPAGsize > 0){
+        for (int i = 0; i < igraph_ecount(G); i++) {
+            // Create the subgraph
+            set<int> current_subgraph;
+            set<int>::iterator got = current_subgraph.find(i);
+            if (got == current_subgraph.end()) // not in set
+                current_subgraph.insert(i);
             
-            // When we start, every edge we add is not permitted in the future
-            set<int>::const_iterator got2 = not_permitted.find(i);
-            if (got2 == not_permitted.end()) // not in set
-                not_permitted.insert(i);
+            set<int> neighbors;
+            set<int> permitted_neighbors;
             
-            //        // debug
-            //        cout<<setfill('-')<<setw(100)<<"subgraphs enumaration"<<setfill('-')<<setw(99)<<"-"<<endl;
-            //        cout<<i<<":";
-            //        //--
-            
-            // add the neighbors of the edge to the possible edges
-            set<int>::iterator it;
-            for (it = edge_neighbors[i].begin(); it != edge_neighbors[i].end(); it++) {
-                set<int>::iterator got = not_permitted.find(*it);
-                // if it is permitted (not not permitted) then we can add it
-                if (got == not_permitted.end()) { // not in set
-                    set<int>::iterator got2 = permitted_neighbors.find(*it);
-                    // If it's not already in the set add it -> security check
-                    if (got2 == permitted_neighbors.end()) // not in set
-                        permitted_neighbors.insert(*it);
+            if (maxPAGsize > 1) {
+                // Enumerate the neighbors of the edge already in the subgraph. This will reduce the complexity of adding the neighbors of a newly added edge to the list of possible edges
+                neighbors = edge_neighbors[i];
+                
+                // When we start, every edge we add is not permitted in the future
+                set<int>::const_iterator got2 = not_permitted.find(i);
+                if (got2 == not_permitted.end()) // not in set
+                    not_permitted.insert(i);
+                
+                //        // debug
+                //        cout<<setfill('-')<<setw(100)<<"subgraphs enumaration"<<setfill('-')<<setw(99)<<"-"<<endl;
+                //        cout<<i<<":";
+                //        //--
+                
+                // add the neighbors of the edge to the possible edges
+                set<int>::iterator it;
+                for (it = edge_neighbors[i].begin(); it != edge_neighbors[i].end(); it++) {
+                    set<int>::iterator got = not_permitted.find(*it);
+                    // if it is permitted (not not permitted) then we can add it
+                    if (got == not_permitted.end()) { // not in set
+                        set<int>::iterator got2 = permitted_neighbors.find(*it);
+                        // If it's not already in the set add it -> security check
+                        if (got2 == permitted_neighbors.end()) // not in set
+                            permitted_neighbors.insert(*it);
+                    }
                 }
             }
+            
+            //        // debug
+            //        set<int>::iterator it2;
+            //        for (it2 = permitted_neighbors.begin(); it2 != permitted_neighbors.end(); it2++)
+            //            cout<<" "<<*it2;
+            //        cout<<endl;
+            //        //--
+            
+            // start constructing subgraphs of size maxPAGsize
+            subgraphs(i, current_subgraph, permitted_neighbors, neighbors);
         }
-        
-        //        // debug
-        //        set<int>::iterator it2;
-        //        for (it2 = permitted_neighbors.begin(); it2 != permitted_neighbors.end(); it2++)
-        //            cout<<" "<<*it2;
-        //        cout<<endl;
-        //        //--
-        
-        // start constructing subgraphs of size maxPAGsize
-        subgraphs(i, current_subgraph, permitted_neighbors, neighbors);
     }
     
     if (maxPAGsize == 0) {
@@ -3095,12 +3097,12 @@ void Security::VD_embeddings(int* max_degree, int* max_count, int* first_pag, in
         cout<<"pag #"<<i<<": ";
         set<int>::iterator iter;
         for (iter = pags[i].pag.begin(); iter != pags[i].pag.end(); iter++)
-            cout<<*iter<<" ";
+            cout<<EAN(G,"ID",*iter)<<" ";
         cout<<endl;
         
         cout<<"vertices: ";
         for (iter = pags[i].vertices.begin(); iter != pags[i].vertices.end(); iter++)
-            cout<<*iter<<" ";
+            cout<<VAN(G, "ID",*iter)<<" ";
         cout<<endl;
         
         for (int j = 0; j < pags[i].embeddings.size(); j++) {
@@ -3202,123 +3204,382 @@ void Security::kiso(int min_L1, int max_L1, int maxPsize, int tresh, bool baseli
     get_vertex_neighbors();
     
     while (igraph_vcount(G) != 0) {
-        start = false;
-        pags.clear();
-        edge_neighbors.clear();
-        cout<<"PAG: "<<maxPAGsize<<endl;
-        cout<<"G: "<<igraph_vcount(G)<<endl;
-        cout<<"H: "<<igraph_vcount(H)<<endl;
-        
-        if (maxPAGsize > 1)
-            get_edge_neighbors();
-        
-        //        // debug
-        //        cout<<setfill('-')<<setw(100)<<"neighbors of edges"<<setfill('-')<<setw(99)<<"-"<<endl;
-        //
-        //        for (int i = 0; i < edge_neighbors.size(); i++) {
-        //            cout<<i<<"'s neighbors:";
-        //            set<int>::iterator it;
-        //            for (it = edge_neighbors[i].begin(); it != edge_neighbors[i].end(); it++)
-        //                cout<<" "<<*it;
-        //            cout<<endl;
-        //        }
-        //        //--
-        
-        find_subgraphs();
-        
-        if (maxPAGsize == 0) {
-//            cout<<"color size: "<<colors.size()<<endl;
-            map<int, vector<int> >::iterator it;
-            for (it = colors.begin(); it != colors.end(); it++) {
-                vector<int> temp = it->second;
-                
-                //int multiple = temp.size()%min_L1;
-                //int div = floor(temp.size()/min_L1);
-//                cout<<"temp size: "<<temp.size()<<endl;
-//                cout<<"tresh: "<<treshold<<endl;
-                int loop = temp.size()-1;
-                //int counter = 0;
-                if (temp.size() >= min_L1) {
-                    for (int i = loop; i >= 0; i--) {
-                        //                    if (multiple != 0 && counter == div*min_L1)
-                        //                        break;
-                        
-                        // add v to H
-                        igraph_add_vertices(H, 1, 0);
-                        int vid = igraph_vcount(H) - 1;
-                        SETVAN(H, "colour", vid, VAN(G, "colour", temp[i]));
-                        SETVAN(H, "ID", vid, VAN(G, "ID", temp[i]));
-                        
-                        // delete v from G
-                        //                    igraph_vs_t id;
-                        //                    igraph_vs_1(&id, temp[i]);
-                        //                    igraph_delete_vertices(G,id);
-                        SETVAN(G, "Removed", temp[i], Removed);
-                        
-                        SETVAS(F, "Tier", VAN(G, "ID", temp[i]), "Bottom");
-                        SETVAS(R, "Tier", VAN(G, "ID", temp[i]), "Bottom");
-                        // delete v from vector
-                        temp.erase(temp.begin()+i);
-                        
-                        //counter++;
-                    }
-                } else {
-                    //                if (multiple != 0) {
-                    if (temp.size() >= treshold || baseline) {
-                        // add
-                        for (int i = min_L1-1; i >= 0; i--) {
+        while(1) {
+            start = false;
+            vector<PAG> tmp;
+            pags.clear();
+            pags.swap(tmp);
+            edge_neighbors.clear();
+            colors.clear();
+            cout<<"PAG: "<<maxPAGsize<<endl;
+            cout<<"G: "<<igraph_vcount(G)<<endl;
+            cout<<"H: "<<igraph_vcount(H)<<endl;
+            
+            if (maxPAGsize > 1)
+                get_edge_neighbors();
+            
+            //        // debug
+            //        cout<<setfill('-')<<setw(100)<<"neighbors of edges"<<setfill('-')<<setw(99)<<"-"<<endl;
+            //
+            //        for (int i = 0; i < edge_neighbors.size(); i++) {
+            //            cout<<i<<"'s neighbors:";
+            //            set<int>::iterator it;
+            //            for (it = edge_neighbors[i].begin(); it != edge_neighbors[i].end(); it++)
+            //                cout<<" "<<*it;
+            //            cout<<endl;
+            //        }
+            //        //--
+            
+            find_subgraphs();
+            
+            if (pags.size() == 0 && maxPAGsize > 0)
+                break;
+            
+            if (maxPAGsize == 0) {
+                //            cout<<"color size: "<<colors.size()<<endl;
+                map<int, vector<int> >::iterator it;
+                for (it = colors.begin(); it != colors.end(); it++) {
+                    vector<int> temp = it->second;
+                    
+                    //int multiple = temp.size()%min_L1;
+                    //int div = floor(temp.size()/min_L1);
+                    //                cout<<"temp size: "<<temp.size()<<endl;
+                    //                cout<<"tresh: "<<treshold<<endl;
+                    int loop = temp.size()-1;
+                    //int counter = 0;
+                    if (temp.size() >= min_L1) {
+                        for (int i = loop; i >= 0; i--) {
+                            //                    if (multiple != 0 && counter == div*min_L1)
+                            //                        break;
+                            
                             // add v to H
                             igraph_add_vertices(H, 1, 0);
-                            
                             int vid = igraph_vcount(H) - 1;
-                            if (i < temp.size()) {
-                                SETVAN(H, "colour", vid, VAN(G, "colour", temp[i]));
-                                SETVAN(H, "ID", vid, VAN(G, "ID", temp[i]));
-                                
-                                // delete v from G
-                                //                                igraph_vs_t id;
-                                //                                igraph_vs_1(&id, temp[i]);
-                                //                                igraph_delete_vertices(G,id);
-                                SETVAN(G, "Removed", temp[i], Removed);
-                                
-                                SETVAS(F, "Tier", VAN(G, "ID", temp[i]), "Bottom");
-                                SETVAS(R, "Tier", VAN(G, "ID", temp[i]), "Bottom");
-                                // delete v from vector
-                                temp.erase(temp.begin()+i);
-                            } else {
-                                H_v_dummy++;
-                                
-                                int tmp = it->first;
-                                SETVAN(H, "colour", vid, tmp);
-                                SETVAN(H, "ID", vid, vid);
-                                
-                                igraph_add_vertices(F, 1, 0);
-                                SETVAS(F, "Tier", igraph_vcount(F) - 1, "Bottom");
-                                SETVAN(F, "Dummy", igraph_vcount(F) - 1, kDummy);
-                            }
-                        }
-                    } else {
-                        loop = temp.size()-1;
-                        for (int i = loop; i >= 0; i--) {
-                            G_v_lifted++;
-                            
-                            set<int>::iterator has = top_tier_vertices.find(VAN(G, "ID",temp[i]));
-                            if (has == top_tier_vertices.end()) // not in set
-                                top_tier_vertices.insert(VAN(G, "ID", temp[i]));
+                            SETVAN(H, "colour", vid, VAN(G, "colour", temp[i]));
+                            SETVAN(H, "ID", vid, VAN(G, "ID", temp[i]));
                             
                             // delete v from G
-                            //                            igraph_vs_t vid;
-                            //                            igraph_vs_1(&vid, temp[i]);
-                            //                            igraph_delete_vertices(G,vid);
+                            //                    igraph_vs_t id;
+                            //                    igraph_vs_1(&id, temp[i]);
+                            //                    igraph_delete_vertices(G,id);
                             SETVAN(G, "Removed", temp[i], Removed);
-                            SETVAS(F, "Tier", VAN(G, "ID", temp[i]), "Top");
-                            SETVAS(R, "Tier", VAN(G, "ID", temp[i]), "Top");
+                            
+                            SETVAS(F, "Tier", VAN(G, "ID", temp[i]), "Bottom");
+                            SETVAS(R, "Tier", VAN(G, "ID", temp[i]), "Bottom");
                             // delete v from vector
                             temp.erase(temp.begin()+i);
+                            
+                            //counter++;
+                        }
+                    } else {
+                        //                if (multiple != 0) {
+                        if (temp.size() >= treshold || baseline) {
+                            // add
+                            for (int i = min_L1-1; i >= 0; i--) {
+                                // add v to H
+                                igraph_add_vertices(H, 1, 0);
+                                
+                                int vid = igraph_vcount(H) - 1;
+                                if (i < temp.size()) {
+                                    SETVAN(H, "colour", vid, VAN(G, "colour", temp[i]));
+                                    SETVAN(H, "ID", vid, VAN(G, "ID", temp[i]));
+                                    
+                                    // delete v from G
+                                    //                                igraph_vs_t id;
+                                    //                                igraph_vs_1(&id, temp[i]);
+                                    //                                igraph_delete_vertices(G,id);
+                                    SETVAN(G, "Removed", temp[i], Removed);
+                                    
+                                    SETVAS(F, "Tier", VAN(G, "ID", temp[i]), "Bottom");
+                                    SETVAS(R, "Tier", VAN(G, "ID", temp[i]), "Bottom");
+                                    // delete v from vector
+                                    temp.erase(temp.begin()+i);
+                                } else {
+                                    H_v_dummy++;
+                                    
+                                    int tmp = it->first;
+                                    SETVAN(H, "colour", vid, tmp);
+                                    SETVAN(H, "ID", vid, vid);
+                                    
+                                    igraph_add_vertices(F, 1, 0);
+                                    SETVAS(F, "Tier", igraph_vcount(F) - 1, "Bottom");
+                                    SETVAN(F, "Dummy", igraph_vcount(F) - 1, kDummy);
+                                }
+                            }
+                        } else {
+                            loop = temp.size()-1;
+                            for (int i = loop; i >= 0; i--) {
+                                G_v_lifted++;
+                                
+                                set<int>::iterator has = top_tier_vertices.find(VAN(G, "ID",temp[i]));
+                                if (has == top_tier_vertices.end()) // not in set
+                                    top_tier_vertices.insert(VAN(G, "ID", temp[i]));
+                                
+                                // delete v from G
+                                //                            igraph_vs_t vid;
+                                //                            igraph_vs_1(&vid, temp[i]);
+                                //                            igraph_delete_vertices(G,vid);
+                                SETVAN(G, "Removed", temp[i], Removed);
+                                SETVAS(F, "Tier", VAN(G, "ID", temp[i]), "Top");
+                                SETVAS(R, "Tier", VAN(G, "ID", temp[i]), "Top");
+                                // delete v from vector
+                                temp.erase(temp.begin()+i);
+                            }
                         }
                     }
                 }
+                
+                int vcount = igraph_vcount(G) - 1;
+                for (int i = vcount; i >= 0; i--) {
+                    if (VAN(G, "Removed", i) == Removed) {
+                        igraph_vs_t vid;
+                        igraph_vs_1(&vid, i);
+                        igraph_delete_vertices(G,vid);
+                    }
+                }
+                
+                break;
             }
+            
+            // find the VD embeddings of every PAG
+            int max_degree = 0;
+            int max_count = 0;
+            int first_pag = -1;
+            vector<vector<int> > VM;
+            
+            for (int i = 0; i < min_L1; i++) {
+                vector<int> temp;
+                VM.push_back(temp);
+            }
+            
+            //            do {
+            //                max_degree = 0;
+            //                max_count = 0;
+            //                first_pag = -1;
+            
+            VD_embeddings(&max_degree, &max_count, &first_pag, min_L1);
+            
+            cout<<endl<<setfill('-')<<setw(100)<<"Add embeddings to H"<<setfill('-')<<setw(99)<<"-"<<endl;
+            cout<<"first: "<<first_pag<<endl;
+            
+            //                if (first_pag == -1)
+            //                    continue;
+            if (first_pag != -1) {
+                if (pags[first_pag].vd_embeddings.vd_embeddings.size() >= min_L1) {
+                    pags[first_pag].processed = true;
+                    //int multiple = pags[first_pag].vd_embeddings.vd_embeddings.size()%min_L1;
+                    map<int, set<int> >::iterator itr;
+                    int counter = 0;
+                    // for every vd-embedding
+                    for (itr = pags[first_pag].vd_embeddings.vd_embeddings.begin(); itr != pags[first_pag].vd_embeddings.vd_embeddings.end(); itr++) {
+                        // if we have a multiple of k vd-embeddings, go through all of them
+                        //                    if (multiple == 0) {
+                        //                        if (counter == pags[first_pag].vd_embeddings.vd_embeddings.size())
+                        //                            break;
+                        //                    } else {
+                        //                        // if we have a non multiple, we take min_L1 embeddings. If the non multiple is bigger than x*L1_min then we take x*L1_min embeddings
+                        //                        int div = floor(pags[first_pag].vd_embeddings.vd_embeddings.size()/min_L1);
+                        //                        if (counter == div*min_L1)
+                        //                            break;
+                        //                    }
+                        
+                        cout<<"embedding added to H: "<<itr->first<<endl;
+                        
+                        map<int,int> mapGH;
+                        set<int> dummy;
+                        int dum;
+                        set<int> edges = itr->second;
+                        
+                        // add embedding to H
+                        create_graph(H, edges,  mapGH, dummy, &dum, false, false);
+                        counter++;
+                        
+                        /*****************************************************************
+                         This works because the mapping saves the corresponding vertex in
+                         an embedding for a pag in ascending order (0->end) do when going
+                         through the vertices of the pag in that order we garentee that the
+                         mapping is valid. Even if the pag is not in the vd-embeddings, if
+                         we get the corresponding vertices for every vd-embed by taking
+                         the mapping done between it and the pag, for every vd-embed, then
+                         we garentee that every vertex in any embed that maps to vertex i
+                         in the pag will map to the vertex of any vd_embed that also maps
+                         to vertex i in the pag
+                         ****************************************************************/
+                        
+                        // if it's an embedding of the pag, then the isomorphic test generated a mapping
+                        if (itr->first != pags[first_pag].embeddings.size()-1)
+                            // go through that mapping and get the id of the vertex in H and insert it in the corresponding column in VM
+                            for (int i = 0; i < igraph_vector_size(pags[first_pag].embeddings[itr->first].map); i++) {
+                                map<int,int>::iterator got = mapGH.find(igraph_vector_e(pags[first_pag].embeddings[itr->first].map, i));
+                                VM[counter%min_L1].push_back(got->second);
+                            }
+                        else { // if it's the pag itself, no mapping was created other than the one I did
+                            map<int,int>::iterator it;
+                            // go through that mapping and get the id of the vertex in H and insert in the corresponding column in VM
+                            for (it = pags[first_pag].mapPAGG.begin(); it != pags[first_pag].mapPAGG.end(); it++) {
+                                map<int,int>::iterator got = mapGH.find(VAN(G,"ID",it->second));
+                                VM[counter%min_L1].push_back(got->second);
+                            }
+                        }
+                        
+                        // debug
+                        if (itr->first != pags[first_pag].embeddings.size()-1) {
+                            cout<<"G H"<<endl;
+                            for (int i = 0; i < igraph_vector_size(pags[first_pag].embeddings[itr->first].map); i++) {
+                                map<int,int>::iterator got = mapGH.find(igraph_vector_e(pags[first_pag].embeddings[itr->first].map, i));
+                                cout<<got->first<<" "<<got->second<<endl;
+                            }
+                        } else {
+                            cout<<"G H pag"<<endl;
+                            map<int,int>::iterator it;
+                            //cout<<pags[first_pag].mapPAGG.size();
+                            for (it = pags[first_pag].mapPAGG.begin(); it != pags[first_pag].mapPAGG.end(); it++) {
+                                map<int,int>::iterator got = mapGH.find(VAN(G,"ID",it->second));
+                                cout<<got->first<<" "<<got->second<<" "<<it->first<<endl;
+                            }
+                        }
+                        //--
+                    }
+                    
+                    // Update PAGs
+                    //update_pags();
+                }
+            }
+            //            } while (first_pag != -1);
+            
+            if (!baseline) {
+                cout<<endl<<setfill('-')<<setw(100)<<"Anonimyze"<<setfill('-')<<setw(99)<<"-"<<endl;
+                
+                while (!pags.empty()) {
+                    start = false;
+                    map<int,vector<int> > vd_embeddings;
+                    // find the pag that has the most vd-embeddings left
+                    for (int i = 0; i < pags.size(); i++) {
+                        int vd_size = pags[i].vd_embeddings.vd_embeddings.size();
+                        
+                        map<int,vector<int> >::iterator got = vd_embeddings.find(vd_size);
+                        if (got == vd_embeddings.end()) { // not in set
+                            vector<int> temp;
+                            temp.push_back(i);
+                            vd_embeddings.insert(pair<int,vector<int> >(vd_size, temp));
+                        } else vd_embeddings[vd_size].push_back(i);
+                    }
+                    
+                    map<int,vector<int> >::iterator got = vd_embeddings.end();
+                    got--;
+                    
+                    int pag = got->second[got->second.size() - 1];
+                    got->second.erase(got->second.begin() + got->second.size() - 1);
+                    if (got->first >= treshold) {
+                        cout<<endl<<setfill('-')<<setw(100)<<"Add embeddings to H"<<setfill('-')<<setw(99)<<"-"<<endl;
+                        cout<<"pag #"<<pag<<endl;
+                        map<int,set<int> >::iterator it;
+                        it = pags[pag].vd_embeddings.vd_embeddings.begin();
+                        
+                        for (int i = 0; i < min_L1; i++) {
+                            if (it == pags[pag].vd_embeddings.vd_embeddings.end()) {
+                                it = pags[pag].vd_embeddings.vd_embeddings.begin();
+                                start = true;
+                            }
+                            
+                            cout<<"embedding added to H: "<<it->first<<endl;
+                            set<int>::iterator itr;
+                            for (itr = it->second.begin(); itr != it->second.end(); itr++)
+                                cout<<*itr<<" ";
+                            cout<<endl;
+                            map<int,int> mapGH;
+                            set<int> dummy;
+                            int dum;
+                            set<int> edges = it->second;
+                            // add embedding to H
+                            create_graph(H, edges, mapGH, dummy, &dum, false, false);
+                            cout<<"H vcount = "<<igraph_vcount(H)<<endl<<endl;
+                            
+                            it++;
+                        }
+                    } else {
+                        // lift those embeddings
+                        cout<<endl<<setfill('-')<<setw(100)<<"Remove embeddings from H"<<setfill('-')<<setw(99)<<"-"<<endl;
+                        cout<<"pag #"<<pag<<endl;
+                        map<int,set<int> >::iterator it;
+                        for (it = pags[pag].vd_embeddings.vd_embeddings.begin(); it != pags[pag].vd_embeddings.vd_embeddings.end(); it++) {
+                            cout<<"embedding removed from H: "<<it->first<<endl;
+                            set<int> removed;
+                            set<int>::iterator itr;
+                            for (itr = it->second.begin(); itr != it->second.end(); itr++) {
+                                int from, to;
+                                
+                                igraph_edge(G,*itr,&from,&to);
+                                
+                                set<int>::iterator got = removed.find(from);
+                                if (got == removed.end()) { // not in set
+                                    G_v_lifted++;
+                                    set<int>::iterator has = top_tier_vertices.find(VAN(G, "ID",from));
+                                    if (has == top_tier_vertices.end()) // not in set
+                                        top_tier_vertices.insert(VAN(G, "ID",from));
+                                    removed.insert(from);
+                                }
+                                SETVAS(F, "Tier", VAN(G, "ID",from), "Top");
+                                SETVAS(R, "Tier", VAN(G, "ID",from), "Top");
+                                
+                                got = removed.find(to);
+                                if (got == removed.end()) { // not in set
+                                    G_v_lifted++;
+                                    set<int>::iterator has = top_tier_vertices.find(VAN(G, "ID",to));
+                                    if (has == top_tier_vertices.end()) // not in set
+                                        top_tier_vertices.insert(VAN(G, "ID",to));
+                                    removed.insert(to);
+                                }
+                                SETVAS(F, "Tier", VAN(G, "ID", to), "Top");
+                                SETVAS(R, "Tier", VAN(G, "ID", to), "Top");
+                                
+                                G_e_lifted++;
+                                map<int, set<int> >::iterator in = top_tier_edges.find(VAN(G, "ID",from));
+                                if (in == top_tier_edges.end()) { // not in set
+                                    set<int> tmp;
+                                    tmp.insert(VAN(G, "ID",to));
+                                    top_tier_edges.insert(pair<int, set<int> >(VAN(G, "ID",from), tmp));
+                                } else in->second.insert(VAN(G, "ID",to));
+                                
+                                int eid;
+                                igraph_get_eid(F, &eid, VAN(G, "ID",from), VAN(G, "ID",to), IGRAPH_DIRECTED, 0);
+                                SETEAS(F, "Tier", eid, "Top");
+                                SETEAS(R, "Tier", eid, "Top");
+                                
+                                SETVAN(G, "Removed", from, Removed);
+                                SETVAN(G, "Removed", to, Removed);
+                                SETEAN(G, "Removed", *itr, Removed);
+                            }
+                        }
+                    }
+                    
+                    // Upadate PAGs
+                    pags.erase(pags.begin() + pag);
+//                    update_pags();
+//                    
+//                    max_degree = 0;
+//                    max_count = 0;
+//                    first_pag = -1;
+//                    
+//                    VD_embeddings(&max_degree, &max_count, &first_pag, min_L1);
+                }
+            }
+            
+            // debug
+            cout<<endl;
+            cout<<"VM:"<<endl;
+            for (int i = 0; i < VM.size(); i++)
+                cout<<i<<" ";
+            cout<<"columns"<<endl;
+            
+            for (int i = 0; i < VM[0].size(); i++) {
+                for(int j = 0; j < VM.size(); j++)
+                    cout<<VM[j][i]<<" ";
+                cout<<endl;
+            }
+            //--
+            
+            cout<<endl;
             
             int vcount = igraph_vcount(G) - 1;
             for (int i = vcount; i >= 0; i--) {
@@ -3329,265 +3590,36 @@ void Security::kiso(int min_L1, int max_L1, int maxPsize, int tresh, bool baseli
                 }
             }
             
-            continue;
-        }
-        
-        // find the VD embeddings of every PAG
-        int max_degree = 0;
-        int max_count = 0;
-        int first_pag = -1;
-        vector<vector<int> > VM;
-        
-        for (int i = 0; i < min_L1; i++) {
-            vector<int> temp;
-            VM.push_back(temp);
-        }
-        
-        do {
-            max_degree = 0;
-            max_count = 0;
-            first_pag = -1;
-            
-            VD_embeddings(&max_degree, &max_count, &first_pag, min_L1);
-            
-            cout<<endl<<setfill('-')<<setw(100)<<"Add embeddings to H"<<setfill('-')<<setw(99)<<"-"<<endl;
-            cout<<"first: "<<first_pag<<endl;
-            
-            if (first_pag == -1)
-                continue;
-            
-            if (pags[first_pag].vd_embeddings.vd_embeddings.size() >= min_L1) {
-                pags[first_pag].processed = true;
-                //int multiple = pags[first_pag].vd_embeddings.vd_embeddings.size()%min_L1;
-                map<int, set<int> >::iterator itr;
-                int counter = 0;
-                // for every vd-embedding
-                for (itr = pags[first_pag].vd_embeddings.vd_embeddings.begin(); itr != pags[first_pag].vd_embeddings.vd_embeddings.end(); itr++) {
-                    // if we have a multiple of k vd-embeddings, go through all of them
-                    //                    if (multiple == 0) {
-                    //                        if (counter == pags[first_pag].vd_embeddings.vd_embeddings.size())
-                    //                            break;
-                    //                    } else {
-                    //                        // if we have a non multiple, we take min_L1 embeddings. If the non multiple is bigger than x*L1_min then we take x*L1_min embeddings
-                    //                        int div = floor(pags[first_pag].vd_embeddings.vd_embeddings.size()/min_L1);
-                    //                        if (counter == div*min_L1)
-                    //                            break;
-                    //                    }
-                    
-                    cout<<"embedding added to H: "<<itr->first<<endl;
-                    
-                    map<int,int> mapGH;
-                    set<int> dummy;
-                    int dum;
-                    set<int> edges = itr->second;
-                    
-                    // add embedding to H
-                    create_graph(H, edges,  mapGH, dummy, &dum, false, false);
-                    counter++;
-                    
-                    /*****************************************************************
-                     This works because the mapping saves the corresponding vertex in
-                     an embedding for a pag in ascending order (0->end) do when going
-                     through the vertices of the pag in that order we garentee that the
-                     mapping is valid. Even if the pag is not in the vd-embeddings, if
-                     we get the corresponding vertices for every vd-embed by taking
-                     the mapping done between it and the pag, for every vd-embed, then
-                     we garentee that every vertex in any embed that maps to vertex i
-                     in the pag will map to the vertex of any vd_embed that also maps
-                     to vertex i in the pag
-                     ****************************************************************/
-                    
-                    // if it's an embedding of the pag, then the isomorphic test generated a mapping
-                    if (itr->first != pags[first_pag].embeddings.size()-1)
-                        // go through that mapping and get the id of the vertex in H and insert it in the corresponding column in VM
-                        for (int i = 0; i < igraph_vector_size(pags[first_pag].embeddings[itr->first].map); i++) {
-                            map<int,int>::iterator got = mapGH.find(igraph_vector_e(pags[first_pag].embeddings[itr->first].map, i));
-                            VM[counter%min_L1].push_back(got->second);
-                        }
-                    else { // if it's the pag itself, no mapping was created other than the one I did
-                        map<int,int>::iterator it;
-                        // go through that mapping and get the id of the vertex in H and insert in the corresponding column in VM
-                        for (it = pags[first_pag].mapPAGG.begin(); it != pags[first_pag].mapPAGG.end(); it++) {
-                            map<int,int>::iterator got = mapGH.find(VAN(G,"ID",it->second));
-                            VM[counter%min_L1].push_back(got->second);
-                        }
-                    }
-                    
-                    // debug
-                    if (itr->first != pags[first_pag].embeddings.size()-1) {
-                        cout<<"G H"<<endl;
-                        for (int i = 0; i < igraph_vector_size(pags[first_pag].embeddings[itr->first].map); i++) {
-                            map<int,int>::iterator got = mapGH.find(igraph_vector_e(pags[first_pag].embeddings[itr->first].map, i));
-                            cout<<got->first<<" "<<got->second<<endl;
-                        }
-                    } else {
-                        cout<<"G H pag"<<endl;
-                        map<int,int>::iterator it;
-                        //cout<<pags[first_pag].mapPAGG.size();
-                        for (it = pags[first_pag].mapPAGG.begin(); it != pags[first_pag].mapPAGG.end(); it++) {
-                            map<int,int>::iterator got = mapGH.find(VAN(G,"ID",it->second));
-                            cout<<got->first<<" "<<got->second<<" "<<it->first<<endl;
-                        }
-                    }
-                    //--
+            int ecount = igraph_ecount(G) - 1;
+            for (int i = ecount; i >= 0; i--) {
+                if (EAN(G, "Removed", i) == Removed) {
+                    igraph_es_t eid;
+                    igraph_es_1(&eid, i);
+                    igraph_delete_edges(G,eid);
                 }
-                
-                // Update PAGs
-                update_pags();
             }
-        } while (first_pag != -1);
+        }
         
-        if (!baseline) {
-            cout<<endl<<setfill('-')<<setw(100)<<"Anonimyze"<<setfill('-')<<setw(99)<<"-"<<endl;
+        if (maxPAGsize == 0) {
+            int vcount = igraph_vcount(G) - 1;
+            for (int i = vcount; i >= 0; i--) {
+                if (VAN(G, "Removed", i) == Removed) {
+                    igraph_vs_t vid;
+                    igraph_vs_1(&vid, i);
+                    igraph_delete_vertices(G,vid);
+                }
+            }
             
-            while (!pags.empty()) {
-                start = false;
-                map<int,vector<int> > vd_embeddings;
-                // find the pag that has the most vd-embeddings left
-                for (int i = 0; i < pags.size(); i++) {
-                    int vd_size = pags[i].vd_embeddings.vd_embeddings.size();
-                    
-                    map<int,vector<int> >::iterator got = vd_embeddings.find(vd_size);
-                    if (got == vd_embeddings.end()) { // not in set
-                        vector<int> temp;
-                        temp.push_back(i);
-                        vd_embeddings.insert(pair<int,vector<int> >(vd_size, temp));
-                    } else vd_embeddings[vd_size].push_back(i);
+            int ecount = igraph_ecount(G) - 1;
+            for (int i = ecount; i >= 0; i--) {
+                if (EAN(G, "Removed", i) == Removed) {
+                    igraph_es_t eid;
+                    igraph_es_1(&eid, i);
+                    igraph_delete_edges(G,eid);
                 }
-                
-                map<int,vector<int> >::iterator got = vd_embeddings.end();
-                got--;
-                
-                int pag = got->second[got->second.size() - 1];
-                got->second.erase(got->second.begin() + got->second.size() - 1);
-                if (got->first >= treshold) {
-                    cout<<endl<<setfill('-')<<setw(100)<<"Add embeddings to H"<<setfill('-')<<setw(99)<<"-"<<endl;
-                    cout<<"pag #"<<pag<<endl;
-                    map<int,set<int> >::iterator it;
-                    it = pags[pag].vd_embeddings.vd_embeddings.begin();
-                    
-                    for (int i = 0; i < min_L1; i++) {
-                        if (it == pags[pag].vd_embeddings.vd_embeddings.end()) {
-                            it = pags[pag].vd_embeddings.vd_embeddings.begin();
-                            start = true;
-                        }
-                        
-                        cout<<"embedding added to H: "<<it->first<<endl;
-                        set<int>::iterator itr;
-                        for (itr = it->second.begin(); itr != it->second.end(); itr++)
-                            cout<<*itr<<" ";
-                        cout<<endl;
-                        map<int,int> mapGH;
-                        set<int> dummy;
-                        int dum;
-                        set<int> edges = it->second;
-                        // add embedding to H
-                        create_graph(H, edges, mapGH, dummy, &dum, false, false);
-                        cout<<"H vcount = "<<igraph_vcount(H)<<endl<<endl;
-                        
-                        it++;
-                    }
-                } else {
-                    // lift those embeddings
-                    cout<<endl<<setfill('-')<<setw(100)<<"Remove embeddings from H"<<setfill('-')<<setw(99)<<"-"<<endl;
-                    cout<<"pag #"<<pag<<endl;
-                    map<int,set<int> >::iterator it;
-                    for (it = pags[pag].vd_embeddings.vd_embeddings.begin(); it != pags[pag].vd_embeddings.vd_embeddings.end(); it++) {
-                        cout<<"embedding removed from H: "<<it->first<<endl;
-                        set<int> removed;
-                        set<int>::iterator itr;
-                        for (itr = it->second.begin(); itr != it->second.end(); itr++) {
-                            int from, to;
-                            
-                            igraph_edge(G,*itr,&from,&to);
-                            
-                            set<int>::iterator got = removed.find(from);
-                            if (got == removed.end()) { // not in set
-                                G_v_lifted++;
-                                set<int>::iterator has = top_tier_vertices.find(VAN(G, "ID",from));
-                                if (has == top_tier_vertices.end()) // not in set
-                                    top_tier_vertices.insert(VAN(G, "ID",from));
-                                removed.insert(from);
-                            }
-                            SETVAS(F, "Tier", VAN(G, "ID",from), "Top");
-                            SETVAS(R, "Tier", VAN(G, "ID",from), "Top");
-                            
-                            got = removed.find(to);
-                            if (got == removed.end()) { // not in set
-                                G_v_lifted++;
-                                set<int>::iterator has = top_tier_vertices.find(VAN(G, "ID",to));
-                                if (has == top_tier_vertices.end()) // not in set
-                                    top_tier_vertices.insert(VAN(G, "ID",to));
-                                removed.insert(to);
-                            }
-                            SETVAS(F, "Tier", VAN(G, "ID", to), "Top");
-                            SETVAS(R, "Tier", VAN(G, "ID", to), "Top");
-                            
-                            G_e_lifted++;
-                            map<int, set<int> >::iterator in = top_tier_edges.find(VAN(G, "ID",from));
-                            if (in == top_tier_edges.end()) { // not in set
-                                set<int> tmp;
-                                tmp.insert(VAN(G, "ID",to));
-                                top_tier_edges.insert(pair<int, set<int> >(VAN(G, "ID",from), tmp));
-                            } else in->second.insert(VAN(G, "ID",to));
-                            
-                            int eid;
-                            igraph_get_eid(F, &eid, VAN(G, "ID",from), VAN(G, "ID",to), IGRAPH_DIRECTED, 0);
-                            SETEAS(F, "Tier", eid, "Top");
-                            SETEAS(R, "Tier", eid, "Top");
-                            
-                            SETVAN(G, "Removed", from, Removed);
-                            SETVAN(G, "Removed", to, Removed);
-                            SETEAN(G, "Removed", *itr, Removed);
-                        }
-                    }
-                }
-                
-                // Upadate PAGs
-                pags.erase(pags.begin() + pag);
-                update_pags();
-                
-                max_degree = 0;
-                max_count = 0;
-                first_pag = -1;
-                
-                VD_embeddings(&max_degree, &max_count, &first_pag, min_L1);
             }
         }
         
-        // debug
-        cout<<endl;
-        cout<<"VM:"<<endl;
-        for (int i = 0; i < VM.size(); i++)
-            cout<<i<<" ";
-        cout<<"columns"<<endl;
-        
-        for (int i = 0; i < VM[0].size(); i++) {
-            for(int j = 0; j < VM.size(); j++)
-                cout<<VM[j][i]<<" ";
-            cout<<endl;
-        }
-        //--
-        
-        cout<<endl;
-        
-        int vcount = igraph_vcount(G) - 1;
-        for (int i = vcount; i >= 0; i--) {
-            if (VAN(G, "Removed", i) == Removed) {
-                igraph_vs_t vid;
-                igraph_vs_1(&vid, i);
-                igraph_delete_vertices(G,vid);
-            }
-        }
-        
-        int ecount = igraph_ecount(G) - 1;
-        for (int i = ecount; i >= 0; i--) {
-            if (EAN(G, "Removed", i) == Removed) {
-                igraph_es_t eid;
-                igraph_es_1(&eid, i);
-                igraph_delete_edges(G,eid);
-            }
-        }
         maxPAGsize--;
         
         cout<<endl;
