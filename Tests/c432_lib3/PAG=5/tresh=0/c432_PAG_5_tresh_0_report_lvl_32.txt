@@ -1,0 +1,22 @@
+Security lvl: 32
+G initial vertex count: 209
+G initial edge count: 303
+G final vertex count: 0
+G final edge count: 0
+
+H final vertex count, with dummies: 3872
+H final edge count, with dummies: 2976
+H final vertex count, without dummies: 209
+H final edge count, without dummies: 158
+
+F circuit vcount: 3872
+F circuit ecount: 3121
+
+Lifted edges: 145
+Lifted edges w/ 1 bond: 0
+Lifted edges w/ 2 bonds: 145
+Total bonds: 290
+
+Took: 1804.4
+
+All took: 1804.51

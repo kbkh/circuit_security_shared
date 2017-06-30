@@ -1,0 +1,106 @@
+Security lvl: 2
+G initial vertex count: 554
+G initial edge count: 796
+G final vertex count: 0
+G final edge count: 0
+
+H final vertex count, with dummies: 554
+H final edge count, with dummies: 417
+H final vertex count, without dummies: 554
+H final edge count, without dummies: 417
+
+F circuit vcount: 554
+F circuit ecount: 796
+
+Lifted edges: 379
+Lifted edges w/ 1 bond: 0
+Lifted edges w/ 2 bonds: 379
+Total bonds: 758
+
+Took: 17.64
+
+Security lvl: 4
+G initial vertex count: 554
+G initial edge count: 796
+G final vertex count: 0
+G final edge count: 0
+
+H final vertex count, with dummies: 554
+H final edge count, with dummies: 405
+H final vertex count, without dummies: 554
+H final edge count, without dummies: 405
+
+F circuit vcount: 554
+F circuit ecount: 796
+
+Lifted edges: 391
+Lifted edges w/ 1 bond: 0
+Lifted edges w/ 2 bonds: 391
+Total bonds: 782
+
+Took: 17.71
+
+Security lvl: 8
+G initial vertex count: 554
+G initial edge count: 796
+G final vertex count: 0
+G final edge count: 0
+
+H final vertex count, with dummies: 554
+H final edge count, with dummies: 394
+H final vertex count, without dummies: 554
+H final edge count, without dummies: 394
+
+F circuit vcount: 554
+F circuit ecount: 796
+
+Lifted edges: 402
+Lifted edges w/ 1 bond: 0
+Lifted edges w/ 2 bonds: 402
+Total bonds: 804
+
+Took: 17.74
+
+Security lvl: 16
+G initial vertex count: 554
+G initial edge count: 796
+G final vertex count: 0
+G final edge count: 0
+
+H final vertex count, with dummies: 561
+H final edge count, with dummies: 379
+H final vertex count, without dummies: 554
+H final edge count, without dummies: 379
+
+F circuit vcount: 561
+F circuit ecount: 796
+
+Lifted edges: 417
+Lifted edges w/ 1 bond: 0
+Lifted edges w/ 2 bonds: 417
+Total bonds: 834
+
+Took: 17.79
+
+Security lvl: 32
+G initial vertex count: 554
+G initial edge count: 796
+G final vertex count: 0
+G final edge count: 0
+
+H final vertex count, with dummies: 554
+H final edge count, with dummies: 352
+H final vertex count, without dummies: 554
+H final edge count, without dummies: 352
+
+F circuit vcount: 554
+F circuit ecount: 796
+
+Lifted edges: 444
+Lifted edges w/ 1 bond: 0
+Lifted edges w/ 2 bonds: 444
+Total bonds: 888
+
+Took: 17.79
+
+All took: 89.78
