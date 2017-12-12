@@ -31,6 +31,7 @@
 
 ofstream koutfile;
 ofstream koutfile2;
+ofstream area_file;
 int target_security;
 
 /********************************************************************************
@@ -75,7 +76,7 @@ int main(int argc, char **argv) {
      ******************************/
     
     bool mono_lib(false), print_gate(false), print_solns(false), print_sat(false), print_blif(false), print_verilog(false), baseline;
-    int num_threads, budget, remove_vertices_max, maxPAGsize, tresh; // Added by Karl (remove_vertices_max)
+    int num_threads, budget, remove_vertices_max, maxPAGsize, tresh;
     float remove_percent(0.6);
     vector<string> test_args;
     string outName;
@@ -134,7 +135,7 @@ int main(int argc, char **argv) {
         return 0;
     }
     
-    target_security = 2;
+    int target_securityy = target_security; //2
     
     cout<<outName<<" "<<tresh<<endl;
     stringstream ss;
@@ -145,7 +146,11 @@ int main(int argc, char **argv) {
     ss2 << maxPAGsize;
     string str2 = ss2.str();
     
-    string outname = "PAG_testing/" + outName + "_PAG_" + str2 + "_tresh_" + str;
+    stringstream ss3;
+    ss3 << target_security;
+    string str3 = ss3.str();
+    
+    string outname = "PAG_testing/" + outName + "_PAG_" + str2 + "_tresh_" + str + "_k_" + str3;
     name = outName;
     outName = outname + ".txt";
     koutfile.open(outName.c_str());
@@ -154,318 +159,244 @@ int main(int argc, char **argv) {
     outname = outname + "_report.txt";
     koutfile2.open(outname.c_str());
     
-    while (target_security <= 32) {
-        string circuit_filename, circuit_name, tech_filename, tech_name, working_dir, report_filename;
+    string circuit_filename, circuit_name, tech_filename, tech_name, working_dir, report_filename;
+    
+    // input circuit
+    if (vm.count("circuit") == 1) {
+        circuit_filename = vm["circuit"].as<string>();
+        circuit_name = circuit_filename.substr(circuit_filename.rfind('/')+1);
+        circuit_name = circuit_name.substr(0, circuit_name.find('.'));
+    } else {
+        cout << optional_args << "\n";
+        return 0;
+    }
+    
+    // input tech lib
+    if (vm.count("tech_lib")) {
+        tech_filename = vm["tech_lib"].as<string>();
+        tech_name = tech_filename.substr(tech_filename.rfind('/')+1);
+        tech_name = tech_name.substr(0, tech_name.find('.'));
+    } else {
+        cout << optional_args << "\n";
+        return 0;
+    }
+    
+    cout << "Circuit : " << circuit_filename << "\n";
+    cout << "Tech Lib: " << tech_filename << "\n";
+    
+    /******************************
+     * Setup working dir
+     ******************************/
+    working_dir = vm["wdir"].as<string>();
+    mkdir(working_dir.c_str(), S_IRWXU);
+    cout << "WDIR    : " << working_dir << "\n";
+    
+    
+    /******************************
+     * Convert circuit using tech_lib
+     ******************************/
+    string outfile = working_dir + circuit_filename.substr(circuit_filename.rfind('/'));
+    cout << "Outfile : " << outfile << "\n";
+    cout << "I'm here!\n";
+    circuit_filename = outfile;
+    // copy tech_lib
+    if ( tech_filename != string(working_dir + tech_filename.substr(tech_filename.rfind('/')) ) ) {
+        ifstream src( tech_filename.c_str() );
+        ofstream dst( string(working_dir + tech_filename.substr(tech_filename.rfind('/')) ).c_str() );
+        dst << src.rdbuf();
+        dst.close();
+        src.close();
+    }
+    
+    /******************************
+     * Load circuit
+     ******************************/
+    Circuit circuit;
+    
+    load_circuit(&circuit, circuit_filename, mono_lib);
+    
+    //Security *security;
+    Circuit G, H, F, R;
+    G.copy(&circuit);
+    G.remove_io();
+    
+    // Added By Karl
+    for (int i = 0; i < igraph_ecount(&G); i++) {
+        SETEAN(&G, "Lifted", i, NotLifted);
+        SETEAN(&G, "Original", i, NotOriginal);
+        SETEAN(&G, "ID", i, i);
+        SETEAN(&G, "Removed", i, NotRemoved);
+        SETEAS(&G, "Tier", i, "Bottom");
+        SETEAN(&G, "Dummy", i, kNotDummy);
+    }
+    
+    for (int i = 0; i < igraph_vcount(&G); i++) {
+        SETVAN(&G, "Removed", i, NotRemoved);
+        SETVAN(&G, "ID", i, i);
+        SETVAS(&G, "Tier", i, "Bottom");
+        SETVAN(&G, "Dummy", i, kNotDummy);
+    }
+    ////////////////
+    
+    circuit.save( working_dir + "/circuit.gml" );
+    G.save( working_dir + "/G_circuit.gml" );
+    
+    /****************************************************************
+     * print G
+     ****************************************************************/
+    if ( test_args.size() > 0 && -1 == atoi(test_args[0].c_str())) {
+        G.print();
+    }
+    
+    if ( test_args.size() > 0 && 0 == atoi(test_args[0].c_str())) {
+        string area_out = "areas/" + circuit_name + "_areas.txt";
+        area_file.open(area_out.c_str());
         
-        // input circuit
-        if (vm.count("circuit") == 1) {
-            circuit_filename = vm["circuit"].as<string>();
-            circuit_name = circuit_filename.substr(circuit_filename.rfind('/')+1);
-            circuit_name = circuit_name.substr(0, circuit_name.find('.'));
-        } else {
-            cout << optional_args << "\n";
-            return 0;
-        }
+        float nand_area = 1.877200, inv_area = 1.407900;
+        string NAND = "nanf201", INV = "invf101";
         
-        // input tech lib
-        if (vm.count("tech_lib")) {
-            tech_filename = vm["tech_lib"].as<string>();
-            tech_name = tech_filename.substr(tech_filename.rfind('/')+1);
-            tech_name = tech_name.substr(0, tech_name.find('.'));
-        } else {
-            cout << optional_args << "\n";
-            return 0;
-        }
+        float area = 0.0;
         
-        cout << "Circuit : " << circuit_filename << "\n";
-        cout << "Tech Lib: " << tech_filename << "\n";
+        for (int i = 0; i < igraph_vcount(&G); i++)
+            area += (string)VAS(&G, "type", i)==NAND ? nand_area:inv_area;
         
+        cout<<area<<endl;
         
-        /******************************
-         * Setup working dir
-         ******************************/
-        working_dir = vm["wdir"].as<string>();
-        mkdir(working_dir.c_str(), S_IRWXU);
-        cout << "WDIR    : " << working_dir << "\n";
-        
-        
-        /******************************
-         * Convert circuit using tech_lib
-         ******************************/
-        string outfile = working_dir + circuit_filename.substr(circuit_filename.rfind('/'));
-        cout << "Outfile : " << outfile << "\n";
-        cout << "I'm here!\n";
-        circuit_filename = outfile;
-        // copy tech_lib
-        if ( tech_filename != string(working_dir + tech_filename.substr(tech_filename.rfind('/')) ) ) {
-            ifstream src( tech_filename.c_str() );
-            ofstream dst( string(working_dir + tech_filename.substr(tech_filename.rfind('/')) ).c_str() );
-            dst << src.rdbuf();
-            dst.close();
-            src.close();
-        }
-        
-        /******************************
-         * Load circuit
-         ******************************/
-        Circuit circuit;
-        
-        load_circuit(&circuit, circuit_filename, mono_lib);
-        
-        Security *security;
-        Circuit G, H, F, R;
-        G.copy(&circuit);
-        G.remove_io();
-        
-        // Added By Karl
-        for (int i = 0; i < igraph_ecount(&G); i++) {
-            SETEAN(&G, "Lifted", i, NotLifted);
-            SETEAN(&G, "Original", i, NotOriginal);
-            SETEAN(&G, "ID", i, i);
-            SETEAN(&G, "Removed", i, NotRemoved);
-            SETEAS(&G, "Tier", i, "Lifted");
-            SETEAN(&G, "Dummy", i, kNotDummy);
-        }
-        
-        for (int i = 0; i < igraph_vcount(&G); i++) {
-            SETVAN(&G, "Removed", i, NotRemoved);
-            SETVAN(&G, "ID", i, i);
-            SETVAS(&G, "Tier", i, "Top");
-            SETVAN(&G, "Dummy", i, kNotDummy);
-        }
-        ////////////////
-        
-        circuit.save( working_dir + "/circuit.gml" );
-        G.save( working_dir + "/G_circuit.gml" );
-        
-        
-        /****************************************************************
-         * print G
-         ****************************************************************/
-        if ( test_args.size() > 0 && -1 == atoi(test_args[0].c_str())) {
-            G.print();
-        }
-        
-        
-        /****************************************************************
-         * L0
-         ****************************************************************/
-        if ( test_args.size() > 0 && 0 == atoi(test_args[0].c_str())) {
+        for (int pag = 4; pag < 7; pag++) {
+            stringstream int_pag;
+            int_pag << pag;
+            string str_pag = int_pag.str();
             
-            int max_count(2);
-            if (test_args.size() == 2)
-                max_count = atoi(test_args[1].c_str());
-            
-            H.copy(&G);
-            H.rand_del_edges(remove_percent);
-            H.save( working_dir + "/H_circuit.gml" );
-            
-//            security = new Security(&G, &H, &F, &R);            security->setConfBudget(budget);
-            
-            cout << "Rand L0: |V(G)| = "  << (int) igraph_vcount(&G);
-            cout << ", |E(G)| = "         << (int) igraph_ecount(&G);
-            cout << ", |V(H)| = "         << (int) igraph_vcount(&H);
-            cout << ", |E(H)| = "         << (int) igraph_ecount(&H) << "\n";
-            
-            cout << " " << boolalpha << security->L0(max_count, false) << endl;
-        }
-        
-        
-        
-        /****************************************************************
-         * L1
-         ****************************************************************/
-        if ( test_args.size() > 0 && 1 == atoi(test_args[0].c_str())) {
-            cout<<"lolzi"<<endl;
-            int max_L1(2);
-            if (test_args.size() == 2)
-                max_L1 = atoi(test_args[1].c_str());
-            
-            H.copy(&G);
-            H.rand_del_edges(remove_percent);
-            
-            if (vm.count("continue_file")) {
-                H.rand_del_edges((float) 1.0); // delete all edges
-                string filename = vm["continue_file"].as<string>();
-                ifstream file;
-                try {
-                    file.open(filename.c_str());
-                    
-                    while (file.good()) {
-                        string line;
-                        int L0, L1;
-                        Edge edge;
-                        
-                        getline(file, line);
-                        if (parse(line, &G, L1, L0, edge)) {
-                            if (L1 >= max_L1) { // If the line in the file shows an L1 higher than max_L1 then the graph with this edge is more secure than without it, so we add it!
-                                // Shouldn't we update max_L1??
-                                H.add_edge(edge);
-                                cout << "L1 = " << max_L1 << ", +<" << edge.first << "," << edge.second << ">" << endl;
-                            }
-                        }
-                    }
-                } catch(...) {}
-            }
-            
-            H.save( working_dir + "/H_circuit.gml" );
-            
-            security = new Security(&G, &H, &F, &R);            security->setConfBudget(budget);
-            
-            cout << "Rand L1: |V(G)| = "  << (int) igraph_vcount(&G);
-            cout << ", |E(G)| = "         << (int) igraph_ecount(&G);
-            cout << ", |V(H)| = "         << (int) igraph_vcount(&H);
-            cout << ", |E(H)| = "         << (int) igraph_ecount(&H) << "\n";
-            
-            cout << " " << boolalpha << security->L1(max_L1, false) << endl;
-        }
-        
-        
-        
-        /****************************************************************
-         * #L1
-         ****************************************************************/
-        if ( test_args.size() == 1 && 2 == atoi(test_args[0].c_str())) {
-            
-            int max_L1(2);
-            if (test_args.size() == 2)
-                max_L1 = atoi(test_args[1].c_str());
-            
-            H.copy(&G);
-            H.rand_del_edges(remove_percent);
-            
-            if (vm.count("continue_file")) {
-                H.rand_del_edges((float) 1.0);
-                string filename = vm["continue_file"].as<string>();
-                ifstream file;
-                try {
-                    file.open(filename.c_str());
-                    
-                    while (file.good()) {
-                        string line;
-                        int L0, L1;
-                        Edge edge;
-                        
-                        getline(file, line);
-                        if (parse(line, &G, L1, L0, edge)) {
-                            H.add_edge(edge);
-                            max_L1 = L1; // Shouldn't we compare max_L1 and L1 first?
-                            cout << "L1 = " << max_L1 << ", +<" << edge.first << "," << edge.second << ">" << endl;
-                        }
-                    }
-                } catch(...) {}
-            }
-            
-            H.save( working_dir + "/H_circuit.gml" );
-            
-            security = new Security(&G, &H, &F, &R);            security->setConfBudget(budget);
-            
-            cout << "Rand L1: |V(G)| = "  << (int) igraph_vcount(&G);
-            cout << ", |E(G)| = "         << (int) igraph_ecount(&G);
-            cout << ", |V(H)| = "         << (int) igraph_vcount(&H);
-            cout << ", |E(H)| = "         << (int) igraph_ecount(&H) << "\n";
-            cout << " " << security->L1(false);
-        }
-        
-        
-        
-        /****************************************************************
-         * S1_rand
-         ****************************************************************/
-        if ( test_args.size() == 1 && 3 == atoi(test_args[0].c_str())) {
-            
-            int max_L1 = G.max_L1();
-            H.copy(&G);
-            H.rand_del_edges((float) 1.0);
-            
-            security = new Security(&G, &H, &F, &R);            security->setConfBudget(budget);
-            
-            string output;
-            output = "S1_rand ("  + G.get_name() + ")";
-            output = report(output, &G, &H, max_L1);
-            cout << output;
-            
-            security->S1_rand(num_threads);
-        }
-        
-        /****************************************************************
-         * S1_greedy
-         ****************************************************************/
-        if ( test_args.size() >= 1 && 4 == atoi(test_args[0].c_str())) {
-            int min_L1(2), max_L1 = G.max_L1();
-            //kmax = max_L1;
-            H.copy(&G);
-            H.rand_del_edges((float) 1.0);
-            bool done(false);
-            
-            if ( test_args.size() == 3 ) {
-                min_L1 = atoi(test_args[1].c_str());
-                max_L1 = atoi(test_args[2].c_str());
-            } else if ( test_args.size() == 2 )
-                min_L1 = atoi(test_args[1].c_str());
-            
-            if (vm.count("continue_file")) {
-                string filename = vm["continue_file"].as<string>();
-                ifstream file;
+            for (int tresh = 0; tresh < 5; tresh += 2) {
+                stringstream int_tresh;
+                int_tresh << tresh;
+                string str_tresh = int_tresh.str();
                 
-                for (int eid = 0; eid < igraph_ecount(&G); eid++)
-                    SETEAS(&G, "style", eid, "invis");
-                
-                try {
-                    file.open(filename.c_str());
+                for (int k = 2; k < 33; k++) {
+                    stringstream int_k;
+                    int_k << k;
+                    string str_k = int_k.str();
                     
-                    while (file.good()) {
-                        string line;
-                        int L0, L1;
-                        Edge edge;
-                        
-                        getline(file, line);
-                        
-                        
-                        if (parse(line, &G, L1, L0, edge)) {
-                            if (L1 < min_L1) {
-                                done = true;
-                                break;
-                            }
+                    Circuit T;
+                    FILE* in;
+                    
+                    
+                    string filenme = "wdir/" + circuit_name + "/" + circuit_name + "_PAG_" + str_pag + "_tresh_" + str_tresh + "_lvl_" + str_k + "_F_circuit.gml";
+                    in = fopen(filenme.c_str(),"r");
+                    if (in == NULL)
+                        continue;
+                    cout<<filenme<<endl;
+                    igraph_read_graph_gml(&T, in);
+                    
+                    int nand = 0, inv = 0;
+                    int Nand = 1, Inv = 0;
+                    
+                    float top_area = 0.0, bottom_area = 0.0;
+                    
+                    for (int i = 0; i < igraph_vcount(&T); i++) {
+                        if ((string)VAS(&T, "Tier", i) == "Top") {
+                            if (VAN(&T, "colour", i) == Nand)
+                                top_area += nand_area;
+                            else if (VAN(&T, "colour", i) == Inv)
+                                top_area += inv_area;
+                        }
+                        else if ((string)VAS(&T, "Tier", i) == "Bottom") {
+                            if (VAN(&T, "colour", i) == Nand)
+                                bottom_area += nand_area;
+                            else if (VAN(&T, "colour", i) == Inv)
+                                bottom_area += inv_area;
                             
-                            H.add_edge(edge);
-                            max_L1 = L1;
-                            cout << "L1 = " << max_L1 << ", +<" << edge.first << "," << edge.second << ">" << endl;
+                            
+                            igraph_vector_t eids;
+                            igraph_vector_init(&eids,0);
+                            igraph_incident(&T, &eids, i, IGRAPH_ALL);
+                            
+                            int size = igraph_vector_size(&eids);
+                            int count = 0;
+                            //cout<<i<<" :";
+                            for (int j = 0; j < size; j++){
+                                // cout<<VECTOR(eids)[j]<<" "<<EAS(&T, "Tier", VECTOR(eids)[j])<<" ";
+                                if ((string)EAS(&T, "Tier", VECTOR(eids)[j]) == "Top" || (string)EAS(&T, "Tier", VECTOR(eids)[j]) == "Crossing" || (string)EAS(&T, "Tier", VECTOR(eids)[j]) == "Lifted") {
+                                    count++;
+                                    // cout<<"count = "<<count<<" ";
+                                }
+                            }
+                            //cout<<endl;
+                            if (count == size)
+                                if (VAN(&T, "colour", i) == Nand)
+                                    nand++;
+                                else if (VAN(&T, "colour", i) == Inv)
+                                    inv++;
+                            
+                            igraph_vector_destroy(&eids);
                         }
                     }
-                } catch(...) {}
-            }
-            
-            if ( test_args.size() == 3 ) {
-                min_L1 = atoi(test_args[1].c_str());
-                max_L1 = atoi(test_args[2].c_str());
-            } else if ( test_args.size() == 2 )
-                min_L1 = atoi(test_args[1].c_str());
-            
-            security = new Security(&G, &H, &F, &R);            security->setConfBudget(budget);
-            
-            string output;
-            output = "S1_greedy ("  + G.get_name() + ")";
-            output = report(output, &G, &H, max_L1);
-            cout << output;
-            
-            fstream report;
-            if (!done)
-            {
-                clock_t tic = clock();
-                security->L1_main(outName, remove_vertices_max, num_threads, min_L1, max_L1); // Added by Karl (true, remove_vertices_max)
-                clock_t toc = clock();
-                cout << endl << "Heuristic took: ";
-                cout << (double) (toc-tic)/CLOCKS_PER_SEC << endl;
+                    
+                    top_area *= 2;
+                    
+                    if (nand > 0 && nand < 10)
+                        nand = 10 - nand;
+                    else if (nand >= 10)
+                        nand = 0;
+                    
+                    if (inv > 0 && inv < 10)
+                        inv = 10 - inv;
+                    else if (inv >= 10)
+                        inv = 0;
+                    
+                    bottom_area = bottom_area + nand*nand_area + inv*inv_area;
+                    
+                    cout<<nand<<" "<<inv<<endl;
+                    
+                    float bond_area = 0;
+                    filenme = "PAG_testing/" + circuit_name + "/" + circuit_name + "_PAG_" + str_pag + "_tresh_" + str_tresh + "_k_" + str_k + "_report.txt";
+                    ifstream infile(filenme.c_str());
+                    string line;
+                    boost::regex bond_rx("Total bonds:");
+                    boost::regex num_rx("\\d{3}");
+                    
+                    string s_bond_area;
+                    
+                    while (infile.good()) {
+                        getline(infile, line);
+                        
+                        if (boost::regex_search(line, bond_rx) && boost::regex_search(line, num_rx)) {
+                            boost::sregex_token_iterator itera(line.begin(),  line.end(), num_rx, 0);
+                            boost::sregex_token_iterator end;
+                            
+                            s_bond_area = *itera;
+                            cout<<"helloowz: "<<s_bond_area<<endl;
+                        }
+                    }
+                    
+                    bond_area = atof(s_bond_area.c_str());
+                    
+                    bond_area *= 16;
+                    
+                    cout<<"top = "<<top_area<<" bottom = "<<bottom_area<<" bond = "<<bond_area<<endl;
+                    float temp = max(top_area, bottom_area);
+                    area = max(temp, bond_area);
+                    
+                    cout<<area<<endl;
+                    area_file<<"PAG: "<<str_pag<<" Threshold: "<<str_tresh<<" security: "<<str_k<<" area = "<<area<<endl;
+                }
             }
         }
         
+        return 0;
+    }
+    
+    while (target_securityy <= target_security) { // 32
+        // Debug
+        //string command = "ps u > usage_" + str3 + "_start.txt";
+        //system(command.c_str());
+        ////////
         
         /****************************************************************
          * k-isomorphism
          ****************************************************************/
         if ( test_args.size() >= 1 && 10 == atoi(test_args[0].c_str())) {
-            
+            cout<<"Kiso"<<endl;
             int min_L1(2), max_L1 = G.max_L1();
             
             if ( test_args.size() == 3 ) {
@@ -474,43 +405,13 @@ int main(int argc, char **argv) {
             } else if ( test_args.size() == 2 )
                 min_L1 = atoi(test_args[1].c_str());
             
-            igraph_vector_t match_vert;
-            igraph_vector_init(&match_vert, 0);
-            
             int original = igraph_vcount(&G);
-            
-            // Creare a vector of size of how many colors we have and fill it with how many vertices of that color exist in the graph
-            //        for (int i = 0; i < igraph_vcount(&G); i++)
-            //        {
-            //            int color = VAN(&G, "colour", i);
-            //            if (igraph_vector_size(&match_vert) < color + 1)
-            //                for (int j = igraph_vector_size(&match_vert); j <= color; j++)
-            //                {
-            //                    igraph_vector_push_back(&match_vert, 0);
-            //                }
-            //            VECTOR(match_vert)[color]++;
-            //        }
+
             cout<<"vcount1: "<<igraph_vcount(&G)<<endl;
             cout<<"ecount1: "<<igraph_ecount(&G)<<endl;
-            igraph_t temp;
-            //	igraph_copy(&temp, &G);
-            //	igraph_destroy(&G);
-            //	for (min_L1 = max_L1; min_L1 >= 1; min_L1--) {
-            //		igraph_copy(&G, &temp);
             
-            // if a color doesn't have a multiple of k (min_L1) vertices, add vertices with that color
             int count = 0;
-            //        for (int i = 0; i < igraph_vector_size(&match_vert); i++)
-            //        {
-            //            int n = ((int) VECTOR(match_vert)[i]) % min_L1; if (n == 0) continue;
-            //            for (int j = 0; j < min_L1 - n; j++)
-            //            { count++;
-            //                igraph_add_vertices(&G, 1, 0);
-            //                SETVAN(&G, "colour", igraph_vcount(&G) - 1, i);
-            //                SETVAN(&G, "Removed", igraph_vcount(&G) - 1, NotRemoved);
-            //                SETVAN(&G, "ID", igraph_vcount(&G) - 1, igraph_vcount(&G) - 1);
-            //            }
-            //        }
+            
             cout<<"vcount2: "<<igraph_vcount(&G)<<endl;
             cout<<"ecount2: "<<igraph_ecount(&G)<<endl;
             
@@ -525,344 +426,17 @@ int main(int argc, char **argv) {
             
             bool done(false);
             
-            // Added by Karl
-            //        for (int i = igraph_ecount(&G)-1; i >= 0; i--) {
-            //            igraph_es_t es;
-            //            igraph_es_1(&es, i);
-            //            igraph_delete_edges(&G,es);
-            //        }
-            //        cout<<"aahhh"<<endl;
-            //        for (int i = igraph_vcount(&G)-1; i >= 0; i--) {
-            //            igraph_vs_t es;
-            //            igraph_vs_1(&es, i);
-            //            igraph_delete_vertices(&G,es);
-            //        }
-            //        cout<<"aahhh2"<<endl;
-            //
-            //        igraph_add_vertices(&G, 9, 0);
-            //        igraph_add_edge(&G,0,1);
-            //        igraph_add_edge(&G,0,2);
-            //        igraph_add_edge(&G,0,3);
-            //        igraph_add_edge(&G,0,4);
-            //        igraph_add_edge(&G,1,2);
-            //        igraph_add_edge(&G,1,5);
-            //        igraph_add_edge(&G,1,6);
-            //        igraph_add_edge(&G,2,7);
-            //        igraph_add_edge(&G,2,8);
-            //        H.copy(&G);
-            //        G.save( working_dir + "/G_circuit.gml");
-            //        H.rand_del_edges((float) 1.0);
-            ////////////////
-            
-            security = new Security(&G, &H, &F, &R);
-            security->setConfBudget(budget);
-            
-            string output;
-            output = "S1_greedy ("  + G.get_name() + ")";
-            output = report(output, &G, &H, max_L1);
-            //        cout << output;
+            //security = new Security(&G, &H, &F, &R);
+            Security security(&G, &H, &F, &R);
             
             fstream report;
-            if (!done)
-            {
+            if (!done) {
                 clock_t tic = clock();
-                security->kiso(target_security, max_L1, maxPAGsize, tresh, baseline);
+                //security->kiso(target_security, max_L1, maxPAGsize, tresh, baseline);
+                security.kiso(target_security, max_L1, maxPAGsize, tresh, baseline);
                 clock_t toc = clock();
-                //        cout << endl << "Heuristic took: ";
-                //       cout << (double) (toc-tic)/CLOCKS_PER_SEC << endl;
-            } //igraph_destroy(&G);}
-            
-        }
-        
-        /****************************************************************
-         * Tree test
-         ****************************************************************/
-        if ( test_args.size() >= 1 && 7 == atoi(test_args[0].c_str())) {
-            
-            int min_L1(2), max_L1 = G.max_L1();
-            
-            //G.erase();
-            igraph_vs_t vs;
-            igraph_vs_all(&vs);
-            
-            igraph_delete_vertices(&G, vs);
-            const int depth = 7;
-            igraph_add_vertices(&G, pow(2,depth)-1, 0);
-            for (int i=0; i < pow(2,depth-1); i++)
-            {
-                int level = floor(log(i+1)/log(2));
-                igraph_add_edge(&G,i,pow(2,level+1) + (i-pow(2,level))*2 - 1);
-                igraph_add_edge(&G,i,pow(2,level+1) + (i-pow(2,level))*2);
             }
             
-            for (int i=0; i < igraph_vcount(&G); i++)
-            {
-                SETVAN(&G, "colour", i, 0);
-                SETVAS(&G, "type", i, "invf101");
-                string label = "label";
-                SETVAS(&G, "label", i, label.c_str());
-            }
-            
-            H.copy(&G);
-            for (int i=0; i < igraph_vcount(&H); i++)
-            {
-                SETVAN(&H, "colour", i, 0);
-            }
-            
-            H.rand_del_edges((float) 1.0);
-            
-            if ( test_args.size() == 3 ) {
-                min_L1 = atoi(test_args[1].c_str());
-                max_L1 = atoi(test_args[2].c_str());
-            } else if ( test_args.size() == 2 )
-                min_L1 = atoi(test_args[1].c_str());
-            
-            
-            if ( test_args.size() == 3 ) {
-                min_L1 = atoi(test_args[1].c_str());
-                max_L1 = atoi(test_args[2].c_str());
-            } else if ( test_args.size() == 2 )
-                min_L1 = atoi(test_args[1].c_str());
-            
-            cout << "I'm here!"; cout.flush();
-            security = new Security(&G, &H, &F, &R);            security->setConfBudget(budget);
-            
-            string output;
-            cout << "I'm here!";
-            output = "S1_greedy ("  + G.get_name() + ")";
-            cout << "I'm here!";
-            output = report(output, &G, &H, max_L1);
-            cout << output;
-            
-            cout << "I'm here!";
-            //security->S1_greedy(num_threads, min_L1, max_L1);
-            
-        }
-        
-        /****************************************************************
-         * Compute security level G if no wires are lifted
-         ****************************************************************/
-        if ( test_args.size() >= 1 && 5 == atoi(test_args[0].c_str())) {
-            
-            H.copy(&G);
-            security = new Security(&G, &H, &F, &R);            security->setConfBudget(budget);
-            H.rand_del_edges((float) 0.0);
-            
-            //	security->clean_solutions();
-            
-            string output;
-            output = "Security of circuit ("  + G.get_name() + ") if no wires are lifted: ";
-            cout << output;
-            
-            security->S1_self();
-            
-        }
-        
-        
-        
-        /****************************************************************
-         * Solve LIFT(G, k, eta)
-         ****************************************************************/
-        
-        if ( test_args.size() >= 1 && 6 == atoi(test_args[0].c_str())) {
-            
-            int min_L1(2), max_L1 = G.max_L1(), eta = igraph_ecount(&G);
-            H.copy(&G);
-            //        H.rand_del_edges((float) 1.0);
-            
-            if ( test_args.size() == 3 ) {
-                min_L1 = atoi(test_args[1].c_str());
-                eta = atoi(test_args[2].c_str());
-            } else if ( test_args.size() == 2 )
-                min_L1 = atoi(test_args[1].c_str());
-            
-            security = new Security(&G, &H, &F, &R);            security->setConfBudget(budget);
-            
-            
-            clock_t tic = clock();
-            security->rSAT(min_L1, max_L1, eta);
-            clock_t toc = clock();
-            cout << endl << "SAT took: ";
-            cout << (double) (toc-tic)/CLOCKS_PER_SEC << endl;
-            
-        }
-        
-        /****************************************************************
-         * Solve LIFT(G, k, eta, u)
-         ****************************************************************/
-        
-        if ( test_args.size() >= 1 && 8 == atoi(test_args[0].c_str())) {
-            
-            int min_L1(2), max_L1 = G.max_L1(), eta = igraph_ecount(&G), u;
-            H.copy(&G);
-            //        H.rand_del_edges((float) 1.0);
-            
-            if ( test_args.size() == 4 ) {
-                u = atoi(test_args[1].c_str());
-                min_L1 = atoi(test_args[2].c_str());
-                eta = atoi(test_args[3].c_str());
-            } else if ( test_args.size() == 3 )
-            {
-                u = atoi(test_args[1].c_str());
-                min_L1 = atoi(test_args[2].c_str());
-            }
-            else if ( test_args.size() == 2 )
-                u = atoi(test_args[1].c_str());
-            
-            security = new Security(&G, &H, &F, &R);            security->setConfBudget(budget);
-            
-            
-            clock_t tic = clock();
-            security->rSAT(min_L1, max_L1, eta, u, true);
-            clock_t toc = clock();
-            cout << endl << "SAT took: ";
-            cout << (double) (toc-tic)/CLOCKS_PER_SEC << endl;
-            
-        }
-        
-        /****************************************************************
-         * Solve LIFT(G, k, eta, u)
-         ****************************************************************/
-        
-        if ( test_args.size() >= 1 && 9 == atoi(test_args[0].c_str())) {
-            
-            int min_L1(2), max_L1 = G.max_L1(), eta = igraph_ecount(&G), u;
-            H.copy(&G);
-            //        H.rand_del_edges((float) 1.0);
-            
-            if ( test_args.size() == 4 ) {
-                u = atoi(test_args[1].c_str());
-                min_L1 = atoi(test_args[2].c_str());
-                eta = atoi(test_args[3].c_str());
-            } else if ( test_args.size() == 3 )
-            {
-                u = atoi(test_args[1].c_str());
-                min_L1 = atoi(test_args[2].c_str());
-            }
-            else if ( test_args.size() == 2 )
-                u = atoi(test_args[1].c_str());
-            
-            security = new Security(&G, &H, &F, &R);            security->setConfBudget(budget);
-            
-            
-            clock_t tic = clock();
-            security->rSAT(min_L1,max_L1, eta, u);
-            clock_t toc = clock();
-            cout << endl << "SAT took: ";
-            cout << (double) (toc-tic)/CLOCKS_PER_SEC << endl;
-            
-        }
-        
-        /****************************************************************
-         * simulated annealing
-         ****************************************************************/
-        
-        
-        if ( test_args.size() >= 1 && 11 == atoi(test_args[0].c_str())) {
-            const double MAX_TEMP = 100000.0;
-            const int MAX_ITERATIONS = 2000;
-            const double TEMP_CHANGE = 0.98;
-            int no_of_edges = atoi(test_args[1].c_str());
-            int min_L1(2), max_L1 = G.max_L1();
-            H.copy(&G);
-            H.rand_del_edges(igraph_ecount(&G) - no_of_edges);
-            security = new Security(&G, &H, &F, &R);            security->setConfBudget(budget);
-            int current_k_security = security->L1();
-            int best_k_security = current_k_security;
-            cout << "Starting with: " << current_k_security << endl;
-            // delete security;
-            double temperature = MAX_TEMP;
-            srand( time(NULL));
-            
-            clock_t tic = clock();
-            for (int iter = 0; iter < MAX_ITERATIONS; iter++) {
-                bool done(false);
-                
-                // H.rand_del_edges(1);
-                vector<Edge> unlifted_edge_list;
-                for (int eid = 0; eid < igraph_ecount(&H); eid++) {
-                    Edge edge = H.get_edge(eid);
-                    unlifted_edge_list.push_back(edge);
-                }
-                random_shuffle(unlifted_edge_list.begin(), unlifted_edge_list.end());
-                H.del_edge(unlifted_edge_list[0]);
-                
-                
-                vector<Edge> edge_list;
-                for (int eid = 0; eid < igraph_ecount(&G); eid++) {
-                    Edge edge = G.get_edge(eid);
-                    if (!H.test_edge(edge)) edge_list.push_back(edge);
-                }
-                random_shuffle(edge_list.begin(), edge_list.end());
-                H.add_edge(edge_list[0]);
-                
-                delete security;
-                security = new Security(&G, &H, &F, &R);                security->setConfBudget(budget);
-                
-                int new_k_security = security->L1();
-                if (new_k_security >= current_k_security) {
-                    current_k_security = new_k_security;
-                    if (current_k_security >= best_k_security) best_k_security = current_k_security;
-                }
-                else {
-                    if (exp((new_k_security-current_k_security)/temperature) >= ((double) rand())/ RAND_MAX) current_k_security = new_k_security;
-                    else {
-                        H.add_edge(unlifted_edge_list[0]);
-                        H.del_edge(edge_list[0]);
-                    }
-                }
-                temperature *= TEMP_CHANGE;
-                if ((iter + 1 )% 10 == 0) cout << " > iteration " << iter + 1 << ", temp=" << temperature << ", best=" << best_k_security << endl;
-                cout.flush();
-                // delete security;
-            }
-            clock_t toc = clock();
-            cout << endl << "Annealing took: ";
-            cout << (toc-tic)/CLOCKS_PER_SEC << endl;
-        }
-        
-        
-        
-        /****************************************************************
-         * L1(label)
-         ****************************************************************/
-        if ( test_args.size() >= 1 && 5 == atoi(test_args[0].c_str())) {
-            
-            string label = "";
-            if (test_args.size() == 2)
-                label = test_args[1];
-            
-            int max_L1(2);
-            H.copy(&G);
-            H.rand_del_edges(remove_percent);
-            
-            if (vm.count("continue_file")) {
-                H.rand_del_edges((float) 1.0);
-                string filename = vm["continue_file"].as<string>();
-                ifstream file;
-                try {
-                    file.open(filename.c_str());
-                    
-                    while (file.good()) {
-                        string line;
-                        int L0, L1;
-                        Edge edge;
-                        
-                        getline(file, line);
-                        if (parse(line, &G, L1, L0, edge)) {
-                            H.add_edge(edge);
-                            max_L1 = L1;
-                            cout << "L1 = " << max_L1 << ", +<" << edge.first << "," << edge.second << ">" << endl;
-                        }
-                    }
-                } catch(...) {}
-            }
-            
-            H.save( working_dir + "/H_circuit.gml" );
-            
-            security = new Security(&G, &H, &F, &R);            security->setConfBudget(budget);
-            
-            security->L1(label);
         }
         
         G.save(working_dir + "/G2_circuit.gml");
@@ -874,7 +448,6 @@ int main(int argc, char **argv) {
                     igraph_delete_vertices(&H,igraph_vss_1(i--)); // this will move all next vertices one inde to the left, this is why we do i--
             ///////////////
             H.save( working_dir + "/H_circuit.gml" );
-            delete security;
         }
         
         stringstream ss1;
@@ -884,15 +457,9 @@ int main(int argc, char **argv) {
         stringstream ss4;
         ss4 << maxPAGsize;
         string str4 = ss4.str();
-        
-        stringstream ss3;
-        ss3 << target_security;
-        string str3 = ss3.str();
 
         F.save(working_dir + "/" + name + "_PAG_" + str4 + "_tresh_"+ str1 + "_lvl_" + str3 + "_F_circuit.gml");
         R.save(working_dir + "/" + name + "_PAG_" + str4 + "_tresh_"+ str1 + "_lvl_" + str3 + "_R_circuit.gml");
-        
-        target_security *= 2;
         
         if (print_gate)
             G.print();
@@ -900,13 +467,19 @@ int main(int argc, char **argv) {
         if (print_blif)
             print_file(circuit_filename);
         
-        if (print_solns)
-            security->print_solutions();
+        // Debug
+        //command = "ps u > usage_" + str3 + "_end.txt";
+        //system(command.c_str());
+        ////////
         
-        if (print_verilog)
-            security->print_solutions();
+        //delete security;
         
+        target_securityy *= 2;
     }
+    
+    // Debug
+    //string command = "ps u > usage_final.txt";
+    //system(command.c_str());
     
     clock_t toc = clock();
     
@@ -917,11 +490,3 @@ int main(int argc, char **argv) {
     
     return 0;
 }
-
-
-
-
-
-
-
-

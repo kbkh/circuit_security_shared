@@ -53,7 +53,6 @@ typedef pair<int,int> Edge;
 struct VeretxAttribs;
 class Circuit;
 
-void sis_convert(string infile, string tech_lib, string outfile);
 void load_circuit(string infile);
 void load_circuit(Circuit *circuit, string infile, bool nand);
 
@@ -65,6 +64,7 @@ void set_bottomE(int a);
 void set_twoBondLiftedEdge(int a);
 void set_oneBondLiftedEdge(int a);
 void set_bonds(int a);
+int get_bonds();
 ////////////////
 
 
@@ -137,8 +137,5 @@ public:
     void save (string filename);
     void load (string filename);
 };
-
-
-
 
 #endif
