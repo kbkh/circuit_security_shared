@@ -53,13 +53,6 @@ Security::Security (Circuit *_G, Circuit *_H, Circuit *_F, Circuit *_R)
     H = _H;
     F = _F;
     R = _R;
-    
-    nand_area = 0.0324;
-    inv_area = 0.01944;
-    nor_area = 0.0324;
-    NAND = "nanf201";
-    INV = "invf101";
-    NOR = "norf201";
 }
 
 Security::~Security() {
@@ -165,6 +158,8 @@ void Security::create_graph(igraph_t* g, set<int> edges, set<int>& vertices_set,
             
             int vid = igraph_vcount(g) - 1;
             
+            //if (verti.size() > 0)
+                //verti[vid] = VAN(G, "ID", from);
             verti.push_back(VAN(G, "ID", from));
             
             if (start && !create) {
@@ -212,6 +207,8 @@ void Security::create_graph(igraph_t* g, set<int> edges, set<int>& vertices_set,
             
             int vid = igraph_vcount(g) - 1;
             
+            //if (verti.size() > 0)
+              //  verti[vid] = VAN(G, "ID", to);
             verti.push_back(VAN(G, "ID", to));
             
             if (start && !create) {
@@ -271,11 +268,13 @@ void Security::create_graph(igraph_t* g, set<int> edges, set<int>& vertices_set,
     }
 }
 
-void Security::isomorphic_test(set<int> current_subgraph) {
+void Security::isomorphic_test(set<int> current_subgraph/*, vector<int> maping*/) {
     set<int> vert;
     igraph_t new_pag; // deleted this
     int max_degree = 0;
     vector<int> verti;
+    
+    //verti.resize(current_subgraph.size());
     
     create_graph(&new_pag, current_subgraph, vert, &max_degree, verti);
     
@@ -415,10 +414,6 @@ void Security::find_VD_embeddings(int i) {
     pags[i].embeddings[pags[i].embeddings.size()-1].edges = pags[i].pag;
     pags[i].embeddings[pags[i].embeddings.size()-1].max_degree = pags[i].max_degree;
     pags[i].embeddings[pags[i].embeddings.size()-1].vertices = pags[i].vertices;
-    pags[i].embeddings[pags[i].embeddings.size()-1].mapEMB = pags[i].mapPAG;
-    igraph_vector_init(&pags[i].embeddings[pags[i].embeddings.size()-1].mapp, 0);
-    for (int j = 0; j < pags[i].vertices.size(); j++)
-        igraph_vector_push_back(&pags[i].embeddings[pags[i].embeddings.size()-1].mapp, j);
     
     pags[i].vd_embeddings.vd_embeddings.clear();
     pags[i].vd_embeddings.max_degree = 0;
@@ -773,8 +768,6 @@ void Security::kiso(int min_L1, int max_L1, int maxPsize, int tresh, bool baseli
     
     get_vertex_neighbors();
     
-    int bond_points = 0;
-    
     while (igraph_vcount(G) != 0) {
         start = false;
         
@@ -899,184 +892,9 @@ void Security::kiso(int min_L1, int max_L1, int maxPsize, int tresh, bool baseli
                 continue;
             
             if (pags[first_pag].vd_embeddings.vd_embeddings.size() >= min_L1) {
-                float lifting_cost = 0;
-                float replicating_cost = 0;
-    
-                // cost of lifting
-                int lifting_bonds = bond_points;
-                float lifting_top_area = 0.0;
-                float lifting_bottom_area = 0.0;
-                
-                set<int> top_vertices;
-                map<int, set<int> >::iterator itr;
-                
-                for (itr = pags[first_pag].vd_embeddings.vd_embeddings.begin(); itr != pags[first_pag].vd_embeddings.vd_embeddings.end(); itr++) {
-                    set<int>::iterator its;
-    
-                    for (its = pags[first_pag].embeddings[itr->first].vertices.begin(); its != pags[first_pag].embeddings[itr->first].vertices.end(); its++)
-                        top_vertices.insert(*its);
-                }
-                
-                for (itr = pags[first_pag].vd_embeddings.vd_embeddings.begin(); itr != pags[first_pag].vd_embeddings.vd_embeddings.end(); itr++) {
-                    set<int>::iterator its;
-                    
-                    //debug
-                    for (its = itr->second.begin(); its != itr->second.end(); its++) {
-                        int from, to;
-                        igraph_edge(G,*its,&from,&to);
-                        cout<<from<<" "<<to<<endl;
-                    }
-                    cout<<"break"<<endl;
-                    for (its = pags[first_pag].embeddings[itr->first].vertices.begin(); its != pags[first_pag].embeddings[itr->first].vertices.end(); its++) {
-                        cout<<*its<<" ";
-                    }
-                    cout<<endl;
-                    //
-                    
-                    for (its = pags[first_pag].embeddings[itr->first].vertices.begin(); its != pags[first_pag].embeddings[itr->first].vertices.end(); its++) {
-                        //top_vertices.insert(*its);
-                        set<int>::iterator itj;
-                        for (itj = vertex_neighbors_in[*its].begin(); itj != vertex_neighbors_in[*its].end(); itj++) {
-                            set<int>::iterator got = pags[first_pag].embeddings[itr->first].vertices.find(*itj);
-                            if (got == pags[first_pag].embeddings[itr->first].vertices.end()) { // not in set
-                                int eid = -1;
-                                igraph_get_eid(G, &eid, *itj, *its, IGRAPH_UNDIRECTED, 1);
-                                if ((string)EAS(G, "Tier", eid) != "Bottom")
-                                    lifting_bonds--;
-                                else {
-                                    set<int>::iterator goti = top_vertices.find(*itj);
-                                    if (goti == top_vertices.end()) // not in set
-                                        lifting_bonds++;
-                                }
-                            }
-                        }
-                        for (itj = vertex_neighbors_out[*its].begin(); itj != vertex_neighbors_out[*its].end(); itj++) {
-                            set<int>::iterator got = pags[first_pag].embeddings[itr->first].vertices.find(*itj);
-                            if (got == pags[first_pag].embeddings[itr->first].vertices.end()) { // not in set
-                                int eid = -1;
-                                igraph_get_eid(G, &eid, *itj, *its, IGRAPH_UNDIRECTED, 1);
-                                if ((string)EAS(G, "Tier", eid) != "Bottom")
-                                    lifting_bonds--;
-                                else {
-                                    set<int>::iterator goti = top_vertices.find(*itj);
-                                    if (goti == top_vertices.end()) // not in set
-                                        lifting_bonds++;
-                                }
-                            }
-                        }
-                    }
-                    cout<<"bond: "<<lifting_bonds<<endl;
-                    cout<<"next"<<endl;
-                }
-                
-                for (int v = 0; v < igraph_vcount(G); v++) {
-                    set<int>::iterator got = top_vertices.find(v);
-                    
-                    if ((string)VAS(G, "type", v) == NAND) {
-                        if (got == top_vertices.end()) // not in set
-                            lifting_bottom_area += nand_area;
-                        else lifting_top_area += nand_area;
-                    }
-                    else if ((string)VAS(G, "type", v) == NOR) {
-                        if (got == top_vertices.end()) // not in set
-                            lifting_bottom_area += nor_area;
-                        else lifting_top_area += nor_area;
-                    }
-                    else if ((string)VAS(G, "type", v) == INV) {
-                        if (got == top_vertices.end()) // not in set
-                            lifting_bottom_area += inv_area;
-                        else lifting_top_area += inv_area;
-                    }
-                }
-                
-                lifting_top_area *= 4; // *2 for older technology; *2 for scaling to "real" area
-                lifting_bottom_area *= 2; // *2 for scaling to "real" area
-                float lifting_bonds_area = (float)lifting_bonds * 0.0784;
-                
-                float lifting_temp = max(lifting_top_area, lifting_bottom_area);
-                lifting_cost = max(lifting_temp, lifting_bonds_area);
-                cout<<"top: "<<lifting_top_area<<" bottom: "<<lifting_bottom_area<<" bonds: "<<lifting_bonds_area<<endl;
-                cout<<"cost: "<<lifting_cost<<endl;
-                cout<<endl;
-                
-                // cost of keeping everything in bottom tier
-                int rep_bonds = bond_points;
-                float rep_top_area = 0.0;
-                float rep_bottom_area = 0.0;
-                
-                itr = pags[first_pag].vd_embeddings.vd_embeddings.begin();
-                
-                map<int,set<int> >::iterator b;
-                map<int,set<int> >::iterator tmp = pags[first_pag].vd_embeddings.vd_embeddings.begin();
-                tmp++;
-                for (b = tmp; b != pags[first_pag].vd_embeddings.vd_embeddings.end(); b++) {
-                    cout<<b->first<<endl;
-                    cout<<pags[first_pag].embeddings.size()<<endl;
-                    cout<<igraph_vector_size(&pags[first_pag].embeddings[b->first].mapp)<<endl;
-                    for (int x = 0; x < igraph_vector_size(&pags[first_pag].embeddings[b->first].mapp); x++) {
-                        int tp = pags[first_pag].embeddings[b->first].mapEMB[VECTOR(pags[first_pag].embeddings[b->first].mapp)[x]];
-                        int tp2 = pags[first_pag].embeddings[itr->first].mapEMB[VECTOR(pags[first_pag].embeddings[itr->first].mapp)[x]];
-
-                        pags[first_pag].embeddings[b->first].mmap.insert(pair<int,int>(tp2,tp));
-                    }
-                    
-                    //debug
-                    map<int,int>::iterator z;
-                    for (z = pags[first_pag].embeddings[b->first].mmap.begin(); z != pags[first_pag].embeddings[b->first].mmap.end(); z++)
-                        cout<<z->first<<" ";
-                    cout<<endl;
-                    for (z = pags[first_pag].embeddings[b->first].mmap.begin(); z != pags[first_pag].embeddings[b->first].mmap.end(); z++)
-                        cout<<z->second<<" ";
-                    cout<<endl;
-                    //
-                }
-                
-                set<int>::iterator its;
-                
-                for (its = pags[first_pag].embeddings[itr->first].vertices.begin(); its != pags[first_pag].embeddings[itr->first].vertices.end(); its++) {
-                    int bond = 0;
-                    
-                    bool stop = false;
-                    
-                    set<int>::iterator ita;
-                    for (ita = vertex_neighbors_in[*its].begin(); ita != vertex_neighbors_in[*its].end(); ita++) {
-                        set<int>::iterator gt = pags[first_pag].embeddings[itr->first].vertices.find(*ita);
-                        
-                        if (gt == pags[first_pag].embeddings[itr->first].vertices.end()) // not in set
-                            bond++;
-                    }
-                            
-                    for (ita = vertex_neighbors_out[*its].begin(); ita != vertex_neighbors_out[*its].end(); ita++) {
-                        set<int>::iterator gt = pags[first_pag].embeddings[itr->first].vertices.find(*ita);
-                        
-                        if (gt == pags[first_pag].embeddings[itr->first].vertices.end()) { // not in set
-                            bond++;
-                            stop = true;
-                            break;
-                        }
-                    }
-                    
-                    if (stop) {
-                        int num = pags[first_pag].vd_embeddings.vd_embeddings.size();
-                        rep_bonds += (bond*max(num, max_L1)); //k
-                        
-                        continue;
-                    }
-                    
-                    map<int,set<int> >::iterator b;
-                    map<int,set<int> >::iterator tmp = pags[first_pag].vd_embeddings.vd_embeddings.begin();
-                    tmp++;
-                    
-                    for (b = tmp; b != pags[first_pag].vd_embeddings.vd_embeddings.end(); b++) {
-                        int v = pags[first_pag].embeddings[b->first].mmap[*its];
-                    }
-                }
-
-                
-                // choose
                 pags[first_pag].processed = true;
                 
-               // map<int, set<int> >::iterator itr;
+                map<int, set<int> >::iterator itr;
                 int counter = 0;
                 // for every vd-embedding
                 for (itr = pags[first_pag].vd_embeddings.vd_embeddings.begin(); itr != pags[first_pag].vd_embeddings.vd_embeddings.end(); itr++) {
@@ -1085,10 +903,9 @@ void Security::kiso(int min_L1, int max_L1, int maxPsize, int tresh, bool baseli
                     set<int> dummy;
                     int dum;
                     set<int> edges = itr->second;
-                    vector<int> d;
                     
                     // add embedding to H
-                    create_graph(H, edges, dummy, &dum, d, false);
+                    //create_graph(H, edges, dummy, &dum, false);
                     counter++;
                 }
                 
@@ -1141,9 +958,8 @@ void Security::kiso(int min_L1, int max_L1, int maxPsize, int tresh, bool baseli
                         set<int> dummy;
                         int dum;
                         set<int> edges = it->second;
-                        vector<int> d;
                         // add embedding to H
-                        create_graph(H, edges, dummy, &dum, d, false);
+                        //create_graph(H, edges, dummy, &dum, false);
                         
                         cout<<"H vcount = "<<igraph_vcount(H)<<endl<<endl;
                         
@@ -1349,5 +1165,244 @@ void Security::kiso(int min_L1, int max_L1, int maxPsize, int tresh, bool baseli
     }
     //--
     cout<<"top tier: "<<top_tier_vertices.size()<<endl;
+}
+
+int Security::update_bond(int L1) {
+    get_edge_neighbors();
+    get_vertex_neighbors();
+    
+    for (int i = 0; i < igraph_ecount(G); i++) {
+        if (EAN(G, "Visited", i) == 1 || (string)EAS(G, "Tier", i) != "Bottom")
+            continue;
+        
+        queue<int> next;
+        set<int> current_graph;
+        vector<int> maping;
+        
+        int from, to;
+        igraph_edge(G,i,&from,&to);
+        
+        SETVAN(G, "Visited", from, 1);
+        SETVAN(G, "Visited", to, 1);
+        
+        SETEAN(G, "Visited", i, 1);
+        next.push(i);
+        current_graph.insert(i);
+        
+        while (!next.empty()) {
+            int s = next.front();
+            next.pop();
+            
+            set<int>::iterator it;
+            for (it = edge_neighbors[s].begin(); it != edge_neighbors[s].end(); it++) {
+                if (EAN(G, "Visited", *it) == 0 && (string)EAS(G, "Tier", *it) == "Bottom") {
+                    int from, to;
+                    igraph_edge(G,*it,&from,&to);
+                    
+                    SETVAN(G, "Visited", from, 1);
+                    SETVAN(G, "Visited", to, 1);
+                    
+                    SETEAN(G, "Visited", *it, 1);
+                    current_graph.insert(*it);
+                    next.push(*it);
+                }
+            }
+        }
+        
+        isomorphic_test(current_graph);
+        
+        set<int>::iterator it;
+        cout<<i<<": ";
+        for (it = current_graph.begin(); it != current_graph.end(); it++)
+            cout<<*it<<" ";
+        cout<<endl;
+    }
+    
+    for (int i = 0; i < pags.size(); i++) {
+        cout<<"pag: "<<i<<endl;
+        set<int>::iterator it;
+        for (it = pags[i].pag.begin(); it != pags[i].pag.end(); it++)
+            cout<<*it<<" ";
+        cout<<endl;
+        for (it = pags[i].vertices.begin(); it != pags[i].vertices.end(); it++)
+            cout<<*it<<" ";
+        cout<<endl;
+        for (int j = 0; j < pags[i].mapPAG.size(); j++)
+            cout<<j<<" ";
+        cout<<endl;
+        for (int j = 0; j < pags[i].mapPAG.size(); j++)
+            cout<<pags[i].mapPAG[j]<<" ";
+        cout<<endl;
+        
+        for (int j = 0; j < pags[i].embeddings.size(); j++) {
+            cout<<"embedding "<<j<<endl;
+            set<int>::iterator it;
+            for (it = pags[i].embeddings[j].edges.begin(); it != pags[i].embeddings[j].edges.end(); it++)
+                cout<<*it<<" ";
+            cout<<endl;
+            for (it = pags[i].embeddings[j].vertices.begin(); it != pags[i].embeddings[j].vertices.end(); it++)
+                cout<<*it<<" ";
+            cout<<endl;
+            for (int k = 0; k < pags[i].embeddings[j].mapEMB.size(); k++)
+                cout<<k<<" ";
+            cout<<endl;
+            for (int k = 0; k < pags[i].embeddings[j].mapEMB.size(); k++)
+                cout<<pags[i].embeddings[j].mapEMB[k]<<" ";
+            cout<<endl<<endl;
+            for (int k = 0; k < igraph_vector_size(&pags[i].embeddings[j].mapp); k++)
+                cout<<k<<" ";
+            cout<<endl;
+            for (int k = 0; k < igraph_vector_size(&pags[i].embeddings[j].mapp); k++)
+                cout<<VECTOR(pags[i].embeddings[j].mapp)[k]<<" ";
+            cout<<endl<<endl;
+            for (int k = 0; k < igraph_vector_size(&pags[i].embeddings[j].mapp); k++)
+                cout<<pags[i].mapPAG[k]<<" ";
+            cout<<endl;
+            for (int k = 0; k < igraph_vector_size(&pags[i].embeddings[j].mapp); k++)
+                cout<<pags[i].embeddings[j].mapEMB[VECTOR(pags[i].embeddings[j].mapp)[k]]<<" ";
+            cout<<endl<<endl;
+            
+            for (int k = 0; k < igraph_vector_size(&pags[i].embeddings[j].mapp); k++) {
+                int v = pags[i].mapPAG[k];
+                int vid = pags[i].embeddings[j].mapEMB[VECTOR(pags[i].embeddings[j].mapp)[k]];
+                pags[i].embeddings[j].mmap.insert(pair<int,int>(v, vid));
+            }
+            
+            map<int,int>::iterator k;
+            for (k = pags[i].embeddings[j].mmap.begin(); k != pags[i].embeddings[j].mmap.end(); k++)
+                cout<<k->first<<" ";
+            cout<<endl;
+            for (k = pags[i].embeddings[j].mmap.begin(); k != pags[i].embeddings[j].mmap.end(); k++)
+                cout<<k->second<<" ";
+            cout<<endl<<endl;
+        }
+    }
+    
+    int bond_points = 0;
+    
+    for (int i = 0; i < pags.size(); i++) {
+        set<int>::iterator it;
+        for (it = pags[i].vertices.begin(); it != pags[i].vertices.end(); it++) {
+            int max_deg = igraph_vertex_degree(G, *it);
+            
+            bool stop = false;
+            
+            //cout<<*it<<" "<<max_deg<<endl;
+            
+            set<int>::iterator itr;
+            for (itr = vertex_neighbors_in[*it].begin(); itr != vertex_neighbors_in[*it].end(); itr++) {
+                int eid = -1;
+                igraph_get_eid(G, &eid, *it, *itr, IGRAPH_UNDIRECTED, 1);
+                if ((string)EAS(G, "Tier", eid) == "Bottom")
+                    max_deg--;
+            }
+           // cout<<*it<<" "<<max_deg<<endl;
+            for (itr = vertex_neighbors_out[*it].begin(); itr != vertex_neighbors_out[*it].end(); itr++) {
+                int eid = -1;
+                igraph_get_eid(G, &eid, *it, *itr, IGRAPH_UNDIRECTED, 1);
+                if ((string)EAS(G, "Tier", eid) != "Bottom") {
+                    stop = true;
+                    max_deg++;
+                    break;
+                }
+            }
+            
+            if (stop) {
+                cout<<"deg: "<<*it<<" "<<max_deg<<endl;
+                
+                int num = 1 + pags[i].embeddings.size();
+                bond_points += (max_deg*max(num, L1)); //k
+                
+                cout<<"B "<<bond_points<<endl;
+                continue;
+            }
+            
+            for (int j = 0; j < pags[i].embeddings.size(); j++) {
+                int v = pags[i].embeddings[j].mmap[*it];
+                
+                int temp_deg = igraph_vertex_degree(G, v);
+                //cout<<v<<" "<<temp_deg<<endl;
+                bool istop = false;
+                
+                set<int>::iterator itr;
+                for (itr = vertex_neighbors_out[v].begin(); itr != vertex_neighbors_out[v].end(); itr++) {
+                    int eid = -1;
+                    igraph_get_eid(G, &eid, v, *itr, IGRAPH_UNDIRECTED, 1);
+                    if ((string)EAS(G, "Tier", eid) != "Bottom") {
+                        istop = true;
+                        max_deg++;
+                        break;
+                    }
+                }
+                
+                if (istop) {
+                    cout<<"t deg: "<<v<<" "<<temp_deg<<endl;
+                    stop = true;
+                    break;
+                }
+                
+               /* for (itr = vertex_neighbors_in[v].begin(); itr != vertex_neighbors_in[v].end(); itr++) {
+                    int eid = -1;
+                    igraph_get_eid(G, &eid, v, *itr, IGRAPH_UNDIRECTED, 1);
+                    if ((string)EAS(G, "Tier", eid) == "Bottom")
+                        temp_deg--;
+                }
+                
+                if (temp_deg > max_deg)
+                    max_deg = temp_deg;*/
+            }
+            
+            if (stop) {
+                int num = 1 + pags[i].embeddings.size();
+                bond_points += (max_deg*max(num, L1)); //k
+                
+                cout<<"B "<<bond_points<<endl;
+                continue;
+            }
+            
+            int num = 1 + pags[i].embeddings.size();
+            bond_points += (max_deg*max(num, L1)); //k
+            
+            cout<<"B "<<bond_points<<endl;
+        }
+    }
+    
+    int nand_count = 0, inv_count = 0, nor_count = 0;
+    
+    for (int i = 0; i < igraph_vcount(G); i++) {
+        if ((string)VAS(G, "Tier", i) == "Bottom" && VAN(G, "Visited", i) == 0) {
+            if (VAN(G, "colour", i) == 2) {
+                nand_count++;
+                SETVAN(G, "Visited", i, 1);
+            } else if (VAN(G, "colour", i) == 0) {
+                inv_count++;
+                SETVAN(G, "Visited", i, 1);
+            } else if (VAN(G, "colour", i) == 1) {
+                nor_count++;
+                SETVAN(G, "Visited", i, 1);
+            }
+        }
+    }
+    
+    int nand_deg = 3, inv_deg = 2, nor_deg = 3;
+    
+    if (nand_count > 0)
+        nand_deg *= max(nand_count, L1); //k
+    else nand_deg = 0;
+    
+    if (inv_count > 0)
+        inv_deg *= max(inv_count, L1); //k
+    else inv_deg = 0;
+    
+    if (nor_count > 0)
+        nor_deg *= max(nor_count, L1); //k
+    else nor_deg = 0;
+    
+    cout<<nand_count<<" "<<inv_count<<" "<<nor_count<<endl;
+    cout<<nand_deg<<" "<<inv_deg<<" "<<nor_deg<<endl;
+    bond_points += (nand_deg + inv_deg + nor_deg);
+    cout<<bond_points<<endl;
+    
+    return bond_points;
 }
 ///////////////
