@@ -32,7 +32,6 @@
 ofstream koutfile;
 ofstream koutfile2;
 ofstream area_file;
-ofstream bond_file;
 int target_security;
 
 /********************************************************************************
@@ -249,76 +248,19 @@ int main(int argc, char **argv) {
         G.print();
     }
     
-    if ( test_args.size() > 0 && 2 == atoi(test_args[0].c_str())) {
-        for (int pag = 4; pag < 7; pag++) {
-            stringstream int_pag;
-            int_pag << pag;
-            string str_pag = int_pag.str();
-            
-            for (int tresh = 0; tresh < 5; tresh += 2) {
-                stringstream int_tresh;
-                int_tresh << tresh;
-                string str_tresh = int_tresh.str();
-                
-                for (int k = 2; k < 33; k++) {
-                    stringstream int_k;
-                    int_k << k;
-                    string str_k = int_k.str();
-                    
-                    Circuit T;
-                    FILE* in;
-                    
-                    string filenme = "wdir/" + circuit_name + "_03/" + circuit_name + "_PAG_" + str_pag + "_tresh_" + str_tresh + "_lvl_" + str_k + "_R_circuit.gml";
-                    in = fopen(filenme.c_str(),"r");
-                    if (in == NULL)
-                        continue;
-                    cout<<filenme<<endl;
-                    igraph_read_graph_gml(&T, in);
-                    
-                    for (int i = 0; i < igraph_ecount(&T); i++)
-                        SETEAN(&T, "Visited", i, 0);
-                    
-                    for (int i = 0; i < igraph_vcount(&T); i++)
-                        SETVAN(&T, "Visited", i, 0);
-                    
-                    //T.save("wdir/new1");
-                    
-                    string bond_name = "bonds/" + circuit_name + "_03/" + circuit_name + "_PAG_" + str_pag + "_tresh_" + str_tresh + "_lvl_" + str_k + "_bonds.txt";
-                    cout<<bond_name<<endl;
-                    bond_file.open(bond_name.c_str());
-                    
-                    Security security(&T, &T, &T, &T);
-                    int bond_points = security.update_bond(k);
-                    
-                    //T.save("wdir/new2");
-                    bond_file<<bond_points<<endl;
-                    bond_file.close();
-                }
-            }
-        }
-        
-        return 0;
-    }
-    
     if ( test_args.size() > 0 && 0 == atoi(test_args[0].c_str())) {
-        string area_out = "areas/" + circuit_name + "_03_areas.txt";
+        string area_out = "areas/" + circuit_name + "_areas.txt";
         area_file.open(area_out.c_str());
         
-        float nand_area = 0.0324, inv_area = 0.01944, nor_area = 0.0324;
-        string NAND = "nanf201", INV = "invf101", NOR = "norf201";
+        float nand_area = 1.877200, inv_area = 1.407900;
+        string NAND = "nanf201", INV = "invf101";
         
         float area = 0.0;
         
-        for (int i = 0; i < igraph_vcount(&G); i++) {
-            if ((string)VAS(&G, "type", i) == NAND)
-                area += nand_area;
-            else if ((string)VAS(&G, "type", i) == INV)
-                area += inv_area;
-            else if ((string)VAS(&G, "type", i) == NOR)
-                area += nor_area;
-        }
+        for (int i = 0; i < igraph_vcount(&G); i++)
+            area += (string)VAS(&G, "type", i)==NAND ? nand_area:inv_area;
         
-        cout<<area*2<<endl;
+        cout<<area<<endl;
         
         for (int pag = 4; pag < 7; pag++) {
             stringstream int_pag;
@@ -339,15 +281,15 @@ int main(int argc, char **argv) {
                     FILE* in;
                     
                     
-                    string filenme = "wdir/" + circuit_name + "_03/" + circuit_name + "_PAG_" + str_pag + "_tresh_" + str_tresh + "_lvl_" + str_k + "_F_circuit.gml";
+                    string filenme = "wdir/" + circuit_name + "/" + circuit_name + "_PAG_" + str_pag + "_tresh_" + str_tresh + "_lvl_" + str_k + "_F_circuit.gml";
                     in = fopen(filenme.c_str(),"r");
                     if (in == NULL)
                         continue;
                     cout<<filenme<<endl;
                     igraph_read_graph_gml(&T, in);
                     
-                    int nand = 0, inv = 0, nor = 0;
-                    int Nand = 2, Inv = 0, Nor = 1;
+                    int nand = 0, inv = 0;
+                    int Nand = 1, Inv = 0;
                     
                     float top_area = 0.0, bottom_area = 0.0;
                     
@@ -357,16 +299,13 @@ int main(int argc, char **argv) {
                                 top_area += nand_area;
                             else if (VAN(&T, "colour", i) == Inv)
                                 top_area += inv_area;
-                            else if (VAN(&T, "colour", i) == Nor)
-                                top_area += nor_area;
                         }
                         else if ((string)VAS(&T, "Tier", i) == "Bottom") {
                             if (VAN(&T, "colour", i) == Nand)
                                 bottom_area += nand_area;
                             else if (VAN(&T, "colour", i) == Inv)
                                 bottom_area += inv_area;
-                            else if (VAN(&T, "colour", i) == Nor)
-                                bottom_area += nor_area;
+                            
                             
                             igraph_vector_t eids;
                             igraph_vector_init(&eids,0);
@@ -383,42 +322,33 @@ int main(int argc, char **argv) {
                                 }
                             }
                             //cout<<endl;
-                            if (count == size) {
+                            if (count == size)
                                 if (VAN(&T, "colour", i) == Nand)
                                     nand++;
                                 else if (VAN(&T, "colour", i) == Inv)
                                     inv++;
-                                else if (VAN(&T, "colour", i) == Nor)
-                                    nor++;
-                            }
                             
                             igraph_vector_destroy(&eids);
                         }
                     }
                     
-                    top_area *= 4;
+                    top_area *= 2;
                     
-                    if (nand > 0 && nand < k)
-                        nand = k - nand;
-                    else if (nand >= k)
+                    if (nand > 0 && nand < 10)
+                        nand = 10 - nand;
+                    else if (nand >= 10)
                         nand = 0;
                     
-                    if (inv > 0 && inv < k)
+                    if (inv > 0 && inv < 10)
                         inv = 10 - inv;
-                    else if (inv >= k)
+                    else if (inv >= 10)
                         inv = 0;
                     
-                    if (nor > 0 && nor < k)
-                        nor = k - nor;
-                    else if (nor >= k)
-                        nor = 0;
+                    bottom_area = bottom_area + nand*nand_area + inv*inv_area;
                     
-                    bottom_area = bottom_area + nand*nand_area + inv*inv_area + nor*nor_area;
-                    bottom_area *= 2;
+                    cout<<nand<<" "<<inv<<endl;
                     
-                    cout<<nand<<" "<<inv<<" "<<nor<<endl;
-                    
-                   /* float bond_area = 0;
+                    float bond_area = 0;
                     filenme = "PAG_testing/" + circuit_name + "/" + circuit_name + "_PAG_" + str_pag + "_tresh_" + str_tresh + "_k_" + str_k + "_report.txt";
                     ifstream infile(filenme.c_str());
                     string line;
@@ -437,18 +367,11 @@ int main(int argc, char **argv) {
                             s_bond_area = *itera;
                             cout<<"helloowz: "<<s_bond_area<<endl;
                         }
-                    }*/
+                    }
                     
-                    float bond_area = 0;
-                    filenme = "bonds/" + circuit_name + "_03/" + circuit_name + "_PAG_" + str_pag + "_tresh_" + str_tresh + "_lvl_" + str_k + "_bonds.txt";
-                    ifstream infile(filenme.c_str());
-                    string line;
+                    bond_area = atof(s_bond_area.c_str());
                     
-                    getline(infile, line);
-                    cout<<"l "<<line<<endl;
-                    bond_area = atof(line.c_str());
-                    
-                    bond_area *= 0.0784;
+                    bond_area *= 16;
                     
                     cout<<"top = "<<top_area<<" bottom = "<<bottom_area<<" bond = "<<bond_area<<endl;
                     float temp = max(top_area, bottom_area);

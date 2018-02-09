@@ -33,7 +33,7 @@ int igraph_vertex_degree (const igraph_t *graph1, const igraph_integer_t vid)
     igraph_vs_t vs;
     igraph_vs_1(&vs, vid);
     
-    igraph_degree(graph1, &degree, vs, IGRAPH_IN, false);
+    igraph_degree(graph1, &degree, vs, IGRAPH_ALL, false);
     int res = VECTOR(degree)[0];
     igraph_vector_destroy(&degree);
     igraph_vs_destroy(&vs);

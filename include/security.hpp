@@ -67,9 +67,6 @@ public:
     set<int> connected_embeddings; // embeddings that share one or more vertices with that embedding
     int size; // how many embeddings it has as not VD
     int max_degree; // degree of this embedding
-    vector<int> mapEMB; // for bonds
-    igraph_vector_t mapp;
-    map<int,int> mmap; 
 };
 
 class VDEMBEDDINGS {
@@ -84,8 +81,7 @@ public:
     bool processed;
     set<int> pag; // edges in pag
     set<int> vertices; // vertices in pag
-    //map<int,int> mapPAGG; // map in which the corresponding vertices in G are stored
-    vector<int> mapPAG; // for bonds
+    map<int,int> mapPAGG; // map in which the corresponding vertices in G are stored
     int max_degree; // degree of this embedding (PAG)
     vector<EMBEDDINGS> embeddings; // embeddings of this pag
     VDEMBEDDINGS vd_embeddings; // vd embeddings of this pag
@@ -122,8 +118,6 @@ public:
     Security (Circuit *G, Circuit *H, Circuit *F, Circuit *R);
     ~Security();
     
-    int update_bond(int L1);
-    
     /* Fill the vector with the neighbors of every edge */
     void get_edge_neighbors();
     
@@ -131,7 +125,7 @@ public:
     void subgraphs(int v, set<int> current_subgraph, set<int> possible_edges, set<int> neighbors);
     
     /* create the graphs from the edges */
-    void create_graph(igraph_t* g, set<int> edges, set<int>& vertices_set, int* max_degree, vector<int>& verti, bool create = true/*, map<int,int>& map12, bool mapping*/);
+    void create_graph(igraph_t* g, set<int> edges, set<int>& vertices_set, int* max_degree, bool create = true/*, map<int,int>& map12, bool mapping*/);
     
     /* Find VD-embeddings */
     void find_VD_embeddings(int i);
@@ -146,7 +140,7 @@ public:
     void VD_embeddings(int* max_degree, int* max_count, int* first_pag, int min_L1);
     
     /* Find new pags and embeddings */
-    void isomorphic_test(set<int> current_subgraph/*, vector<int> maping*/);
+    void isomorphic_test(set<int> current_subgraph);
     
     /* Save the neighbors of every vertex */
     void get_vertex_neighbors();
